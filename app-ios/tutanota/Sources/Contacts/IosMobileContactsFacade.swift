@@ -150,6 +150,21 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		}
 	}
 
+	func isLocalStorageAvailable() async throws -> Bool {
+		let store = CNContactStore()
+
+		do {
+			let containers = try store.containers(matching: nil)
+			TUTSLog("Contact containers: \(containers.map { "\($0.name) \($0.type) \($0.type.rawValue)" }.joined(separator: ","))")
+
+			// Apple allow just ONE local container, so we can query for the first and unique one
+			return containers.contains(where: { $0.type == CNContainerType.local })
+		} catch {
+			TUTSLog("Failed to fetch containers: \(error)")
+			return false
+		}
+	}
+
 	private func enumerateContactsInContactStore(
 		_ contactStore: CNContactStore,
 		with fetchRequest: CNContactFetchRequest,
@@ -168,6 +183,7 @@ class IosMobileContactsFacade: MobileContactsFacade {
 
 		do {
 			let containers = try store.containers(matching: nil)
+			TUTSLog("Contact containers: \(containers.map { "\($0.name) \($0.type) \($0.type.rawValue)" }.joined(separator: ","))")
 
 			// Apple allow just ONE local container, so we can query for the first and unique one
 			let localContainer = containers.first(where: { $0.type == CNContainerType.local })

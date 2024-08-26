@@ -52,6 +52,10 @@ public class MobileContactsFacadeReceiveDispatcher {
 				contactId
 			)
 			return "null"
+		case "isLocalStorageAvailable":
+			let result = try await self.facade.isLocalStorageAvailable(
+			)
+			return toJson(result)
 		default:
 			fatalError("licc messed up! \(method)")
 		}

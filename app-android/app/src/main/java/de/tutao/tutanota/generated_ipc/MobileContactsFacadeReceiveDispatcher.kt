@@ -62,6 +62,11 @@ class MobileContactsFacadeReceiveDispatcher(
 				)
 				return json.encodeToString(result)
 			}
+			"isLocalStorageAvailable" -> {
+				val result: Boolean = this.facade.isLocalStorageAvailable(
+				)
+				return json.encodeToString(result)
+			}
 			else -> throw Error("unknown method for MobileContactsFacade: $method")
 		}
 	}

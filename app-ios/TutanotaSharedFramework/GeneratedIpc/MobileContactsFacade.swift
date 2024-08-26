@@ -46,4 +46,9 @@ public protocol MobileContactsFacade {
 		_ username: String,
 		_ contactId: String?
 	) async throws -> Void
+	/**
+	 * Whether contacts can be persisted locally
+	 */
+	func isLocalStorageAvailable(
+	) async throws -> Bool
 }

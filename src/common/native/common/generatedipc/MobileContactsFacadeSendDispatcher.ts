@@ -25,4 +25,7 @@ export class MobileContactsFacadeSendDispatcher implements MobileContactsFacade 
 	async deleteContacts(...args: Parameters<MobileContactsFacade["deleteContacts"]>) {
 		return this.transport.invokeNative("ipc", ["MobileContactsFacade", "deleteContacts", ...args])
 	}
+	async isLocalStorageAvailable(...args: Parameters<MobileContactsFacade["isLocalStorageAvailable"]>) {
+		return this.transport.invokeNative("ipc", ["MobileContactsFacade", "isLocalStorageAvailable", ...args])
+	}
 }

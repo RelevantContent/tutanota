@@ -199,6 +199,10 @@ export class NativeContactsSyncManager {
 		}
 	}
 
+	async shouldWarnAboutICloudSync(): Promise<boolean> {
+		return isIOSApp() && !(await this.mobilContactsFacade.isLocalStorageAvailable())
+	}
+
 	private handleNoPermissionError(userId: string, error: PermissionError) {
 		console.log("No permission to sync contacts, disabling sync", error)
 		this.deviceConfig.setUserSyncContactsWithPhonePreference(userId, false)

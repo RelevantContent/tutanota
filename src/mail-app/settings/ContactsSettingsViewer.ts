@@ -11,6 +11,7 @@ import { Button, ButtonType } from "../../common/gui/base/Button.js"
 import { Dialog } from "../../common/gui/base/Dialog.js"
 import { mailLocator } from "../mailLocator.js"
 import { UpdatableSettingsViewer } from "../../common/settings/Interfaces.js"
+import { assert } from "@tutao/tutanota-utils"
 
 assertMainOrNode()
 
@@ -112,6 +113,43 @@ export class ContactsSettingsViewer implements UpdatableSettingsViewer {
 			},
 			dropdownWidth: 250,
 		})
+	}
+
+	private async onContactSyncSelectionChanged(contactSyncEnabled: boolean) {
+		assert(isApp(), "isApp")
+		const syncManager = mailLocator.nativeContactsSyncManager()
+
+		if (!contactSyncEnabled) {
+			syncManager.disableSync()
+		} else {
+			if (await syncManager.shouldWarnAboutICloudSync()) {
+				// FIXME: translate
+				const choice = await Dialog.choice<"cancel" | "settings" | "enable">(
+					() => "iCloud sync for contacts is enabled on your device. Please disable it to avoid issues with contacts.",
+					[
+						{ text: "cancel_action", value: "cancel" },
+						{ text: () => "Go to Settings", value: "settings" },
+						{ text: () => "Enable anyway", value: "enable" },
+					],
+				)
+				switch (choice) {
+					case "cancel":
+						return
+					case "settings":
+						locator.systemFacade.openLink("App-prefs:CASTLE")
+						return
+					case "enable":
+						break
+				}
+			}
+			syncManager.enableSync()
+			// We just enable if the synchronization started successfully
+			syncManager.syncContacts().then((allowed) => {
+				if (!allowed) {
+					this.handleContactsSynchronizationFail()
+				}
+			})
+		}
 	}
 
 	updateTutaPropertiesSettings(props: TutanotaProperties) {

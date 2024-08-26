@@ -917,7 +917,7 @@ class MailLocator {
 		return popupModel
 	}
 
-	readonly nativeContactsSyncManager = lazyMemoized(() => {
+	readonly nativeContactsSyncManager: () => NativeContactsSyncManager = lazyMemoized(() => {
 		assert(isApp(), "isApp")
 		return new NativeContactsSyncManager(this.logins, this.mobileContactsFacade, this.entityClient, this.eventController, this.contactModel, deviceConfig)
 	})

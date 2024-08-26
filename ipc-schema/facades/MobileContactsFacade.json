@@ -66,6 +66,11 @@
 				}
 			],
 			"ret": "void"
+		},
+		"isLocalStorageAvailable": {
+			"doc": "Whether contacts can be persisted locally",
+			"arg": [],
+			"ret": "boolean"
 		}
 	}
 }

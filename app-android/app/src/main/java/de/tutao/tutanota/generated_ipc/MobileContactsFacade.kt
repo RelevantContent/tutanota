@@ -49,4 +49,9 @@ interface MobileContactsFacade {
 		username: String,
 		contactId: String?,
 	): Unit
+	/**
+	 * Whether contacts can be persisted locally
+	 */
+	suspend fun isLocalStorageAvailable(
+	): Boolean
 }
