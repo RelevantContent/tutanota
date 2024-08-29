@@ -64,7 +64,7 @@ import { SearchViewModel } from "./search/view/SearchViewModel.js"
 import { SearchRouter } from "../common/search/view/SearchRouter.js"
 import { MailOpenedListener } from "./mail/view/MailViewModel.js"
 import { getEnabledMailAddressesWithUser } from "../common/mailFunctionality/SharedMailUtils.js"
-import { Const, FeatureType, GroupType, KdfType } from "../common/api/common/TutanotaConstants.js"
+import { ClientOnlyCalendars, Const, FeatureType, GroupType, KdfType } from "../common/api/common/TutanotaConstants.js"
 import { ShareableGroupType } from "../common/sharing/GroupUtils.js"
 import { ReceivedGroupInvitationsModel } from "../common/sharing/model/ReceivedGroupInvitationsModel.js"
 import { CalendarViewModel } from "../calendar-app/calendar/view/CalendarViewModel.js"
@@ -121,6 +121,7 @@ import type { ParsedEvent } from "../common/calendar/import/CalendarImporter.js"
 import type { ContactImporter } from "./contacts/ContactImporter.js"
 import { ExternalCalendarFacade } from "../common/native/common/generatedipc/ExternalCalendarFacade.js"
 import { locator } from "../common/api/main/CommonLocator.js"
+import { generateRandomColor } from "../calendar-app/calendar/gui/CalendarGuiUtils.js"
 
 assertMainOrNode()
 
@@ -334,6 +335,7 @@ class MailLocator {
 			await this.receivedGroupInvitationsModel(GroupType.Calendar),
 			timeZone,
 			this.mailModel,
+			this.contactModel,
 		)
 	})
 
@@ -987,6 +989,7 @@ class MailLocator {
 				const calendarModel = await locator.calendarModel()
 				calendarModel.handleSyncExternalCalendars()
 			},
+			this.setUpClientOnlyCalendars,
 		)
 	})
 
@@ -1005,6 +1008,16 @@ class MailLocator {
 			)
 		}
 	}
+
+	setUpClientOnlyCalendars() {
+		let configs = deviceConfig.getClientOnlyCalendars()
+
+		for (const [clientOnlyCalendar, name] of ClientOnlyCalendars.entries()) {
+			const config = configs.get(clientOnlyCalendar)
+			if (!config) deviceConfig.updateClientOnlyCalendars(clientOnlyCalendar, { name, color: generateRandomColor() })
+		}
+	}
+
 	readonly credentialFormatMigrator: () => Promise<CredentialFormatMigrator> = lazyMemoized(async () => {
 		const { CredentialFormatMigrator } = await import("../common/misc/credentials/CredentialFormatMigrator.js")
 		if (isDesktop()) {

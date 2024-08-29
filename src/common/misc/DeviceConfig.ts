@@ -9,6 +9,7 @@ import { client } from "./ClientDetector"
 import { NewsItemStorage } from "./news/NewsModel.js"
 import { CredentialsInfo } from "../native/common/generatedipc/CredentialsInfo.js"
 import { CalendarViewType } from "../api/common/utils/CommonCalendarUtils.js"
+import { GroupSettings } from "../api/entities/tutanota/TypeRefs.js"
 
 assertMainOrNodeBoot()
 export const defaultThemePreference: ThemePreference = "auto:light|dark"
@@ -55,6 +56,7 @@ interface ConfigObject {
 	// True if the credentials have been migrated to native
 	isCredentialsMigratedToNative: boolean
 	lastExternalCalendarSync: Record<Id, number>
+	clientOnlyCalendars: Record<Id, Pick<GroupSettings, "name" | "color">>
 }
 
 /**
@@ -114,6 +116,7 @@ export class DeviceConfig implements UsageTestStorage, NewsItemStorage {
 			isSetupComplete: loadedConfig.isSetupComplete ?? false,
 			isCredentialsMigratedToNative: loadedConfig.isCredentialsMigratedToNative ?? false,
 			lastExternalCalendarSync: loadedConfig.lastExternalCalendarSync ?? {},
+			clientOnlyCalendars: loadedConfig.clientOnlyCalendars ?? new Map(),
 		}
 
 		// We need to write the config if there was a migration and if we generate the signup token and if.
@@ -391,6 +394,16 @@ export class DeviceConfig implements UsageTestStorage, NewsItemStorage {
 
 	setMailAutoSelectBehavior(action: ListAutoSelectBehavior) {
 		this.config.mailAutoSelectBehavior = action
+		this.writeToStorage()
+	}
+
+	getClientOnlyCalendars() {
+		return new Map(Object.entries(this.config.clientOnlyCalendars))
+	}
+
+	updateClientOnlyCalendars(calendarId: Id, clientOnlyCalendarConfig: Pick<GroupSettings, "name" | "color">): void {
+		const map = this.getClientOnlyCalendars().set(calendarId, clientOnlyCalendarConfig)
+		this.config.clientOnlyCalendars = Object.fromEntries(map)
 		this.writeToStorage()
 	}
 }

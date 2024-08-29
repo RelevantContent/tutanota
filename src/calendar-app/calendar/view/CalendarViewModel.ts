@@ -1,5 +1,16 @@
-import { $Promisable, assertNotNull, clone, debounce, findAndRemove, getStartOfDay, groupByAndMapUniquely } from "@tutao/tutanota-utils"
-import { CalendarEvent, CalendarEventTypeRef, GroupSettings } from "../../../common/api/entities/tutanota/TypeRefs.js"
+import {
+	$Promisable,
+	assertNotNull,
+	clone,
+	debounce,
+	downcast,
+	findAndRemove,
+	getStartOfDay,
+	groupByAndMapUniquely,
+	isNotNull,
+	LazyLoaded,
+} from "@tutao/tutanota-utils"
+import { CalendarEvent, CalendarEventTypeRef, Contact, ContactTypeRef, GroupSettings } from "../../../common/api/entities/tutanota/TypeRefs.js"
 import { getWeekStart, GroupType, OperationType, WeekStart } from "../../../common/api/common/TutanotaConstants"
 import { NotAuthorizedError, NotFoundError } from "../../../common/api/common/error/RestError"
 import { getElementId, getListId, isSameId } from "../../../common/api/common/utils/EntityUtils"
@@ -8,9 +19,17 @@ import { IProgressMonitor } from "../../../common/api/common/utils/ProgressMonit
 import type { ReceivedGroupInvitation } from "../../../common/api/entities/sys/TypeRefs.js"
 import stream from "mithril/stream"
 import Stream from "mithril/stream"
-import { getDiffIn60mIntervals, getMonthRange, isEventBetweenDays } from "../../../common/calendar/date/CalendarUtils"
-import { isAllDayEvent } from "../../../common/api/common/utils/CommonCalendarUtils"
-import { CalendarEventModel, CalendarOperation, EventSaveResult, EventType, getNonOrganizerAttendees } from "../gui/eventeditor-model/CalendarEventModel.js"
+import { generateUid, getDiffIn60mIntervals, getMonthRange, isEventBetweenDays } from "../../../common/calendar/date/CalendarUtils"
+import { generateEventElementId, isAllDayEvent } from "../../../common/api/common/utils/CommonCalendarUtils"
+import {
+	assembleCalendarEventEditResult,
+	assignEventIdentity,
+	CalendarEventModel,
+	CalendarOperation,
+	EventSaveResult,
+	EventType,
+	getNonOrganizerAttendees,
+} from "../gui/eventeditor-model/CalendarEventModel.js"
 import { askIfShouldSendCalendarUpdatesToAttendees, getEventType, shouldDisplayEvent } from "../gui/CalendarGuiUtils.js"
 import { ReceivedGroupInvitationsModel } from "../../../common/sharing/model/ReceivedGroupInvitationsModel"
 import type { CalendarInfo, CalendarModel } from "../model/CalendarModel"
@@ -26,6 +45,10 @@ import { CalendarEventPreviewViewModel } from "../gui/eventpopup/CalendarEventPr
 import { EntityUpdateData, isUpdateFor, isUpdateForTypeRef } from "../../../common/api/common/utils/EntityUpdateUtils.js"
 import { MailModel } from "../../../common/mailFunctionality/MailModel.js"
 import { getEnabledMailAddressesWithUser } from "../../../common/mailFunctionality/SharedMailUtils.js"
+import { ContactModel } from "../../../common/contactsFunctionality/ContactModel.js"
+import { locator } from "../../../common/api/main/CommonLocator.js"
+import { calendarLocator } from "../../calendarLocator.js"
+import { DateTime } from "luxon"
 
 export type EventsOnDays = {
 	days: Array<Date>
@@ -79,6 +102,9 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 	// The size of the list in the view
 	private viewSize: number | null = null
 
+	private lazyLoadedContactswithBirthday: LazyLoaded<Contact[]>
+	private contactsWithBirthday: Contact[] = []
+
 	constructor(
 		private readonly logins: LoginController,
 		private readonly createCalendarEventEditModel: CalendarEventEditModelsFactory,
@@ -92,6 +118,7 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 		private readonly calendarInvitationsModel: ReceivedGroupInvitationsModel<GroupType.Calendar>,
 		private readonly timeZone: string,
 		private readonly mailModel: MailModel,
+		private readonly contactModel: ContactModel,
 	) {
 		this._transientEvents = []
 
@@ -124,7 +151,64 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 
 		calendarInvitationsModel.init()
 
-		this.eventsRepository.getEventsForMonths().map(() => this.doRedraw())
+		this.lazyLoadedContactswithBirthday = new LazyLoaded(async () => {
+			const listId = await this.contactModel.getContactListId()
+			if (listId == null) return []
+			return await this.entityClient
+				.loadAll(ContactTypeRef, listId)
+				.then((allContacts) => allContacts.filter((contact) => isNotNull(contact.birthdayIso)))
+				.then((result) => {
+					const regex = /\d{2}-\d{2}$/
+					result.sort((a, b) => {
+						const dateA = a.birthdayIso?.match(regex)
+						console.log(dateA)
+						const dateB = b.birthdayIso?.match(regex)
+						console.log(dateB)
+						return new Date(dateA![0]).getTime() - new Date(dateB![0]).getTime()
+					})
+					this.contactsWithBirthday = result
+
+					const currentYear = new Date().getFullYear()
+					for (const contact of result) {
+						// create an event
+						// FIXME Improve this code, event creation and date setup
+						const uid = generateUid("clientOnly_birthdays", Date.now())
+						console.log({ contactBirthdayIso: contact.birthdayIso })
+						const birthday = new Date(contact.birthdayIso!).setUTCFullYear(currentYear)
+						console.log({ birthdayThisYear: birthday })
+						const startDate = new Date(new Date(birthday).setUTCHours(0, 0, 0, 0))
+						const newEvent = assignEventIdentity(
+							{
+								// FIXME Add translation with variable
+								summary: `${contact.firstName}'s Birthday`,
+								startTime: new Date(startDate),
+								endTime: new Date(startDate.setDate(startDate.getDate() + 1)),
+								location: "",
+								description: "",
+								alarmInfos: [],
+								organizer: null,
+								attendees: [],
+								invitedConfidentially: null,
+								repeatRule: null,
+							},
+							{ uid },
+						)
+						newEvent._id = ["clientOnly_birthdays", generateEventElementId(newEvent.startTime.getTime())]
+						newEvent._ownerGroup = "clientOnly_birthdays"
+
+						eventsRepository.pushClientOnlyEvent(getMonthRange(newEvent.startTime, this.timeZone).start, newEvent)
+					}
+					return this.contactsWithBirthday
+				})
+		})
+		this.lazyLoadedContactswithBirthday.getAsync().then(() => {
+			console.log(this.eventsRepository.getClientOnlyEvents())
+		})
+
+		this.eventsRepository.getEventsForMonths().map(() => {
+			console.log(this.eventsRepository.getEventsForMonths()())
+			this.doRedraw()
+		})
 	}
 
 	isDaySelectorExpanded(): boolean {

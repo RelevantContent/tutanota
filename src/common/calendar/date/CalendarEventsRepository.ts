@@ -8,7 +8,7 @@ import { getListId, isSameId } from "../../api/common/utils/EntityUtils.js"
 import { DateTime } from "luxon"
 import { CalendarFacade } from "../../api/worker/facades/lazy/CalendarFacade.js"
 import { EntityClient } from "../../api/common/EntityClient.js"
-import { findAllAndRemove } from "@tutao/tutanota-utils"
+import { clone, findAllAndRemove, getStartOfDay } from "@tutao/tutanota-utils"
 import { OperationType } from "../../api/common/TutanotaConstants.js"
 import { NotAuthorizedError, NotFoundError } from "../../api/common/error/RestError.js"
 import { EventController } from "../../api/main/EventController.js"
@@ -31,6 +31,8 @@ export class CalendarEventsRepository {
 	private readonly loadedMonths = new Set<number>()
 	private daysToEvents: Stream<DaysToEvents> = stream(new Map())
 	private pendingLoadRequest: Promise<void> = Promise.resolve()
+
+	private clientOnlyEvents: Map<number, CalendarEvent[]> = new Map()
 
 	constructor(
 		private readonly calendarModel: CalendarModel,
@@ -68,7 +70,23 @@ export class CalendarEventsRepository {
 
 					try {
 						const calendarInfos = await this.calendarModel.getCalendarInfos()
-						this.replaceEvents(await this.calendarFacade.updateEventMap(month, calendarInfos, this.daysToEvents(), this.zone))
+						const eventsMap = await this.calendarFacade.updateEventMap(month, calendarInfos, this.daysToEvents(), this.zone)
+						this.replaceEvents(eventsMap)
+
+						const clientOnlyEventsOfThisMonth = this.clientOnlyEvents.get(month.start)
+						if (clientOnlyEventsOfThisMonth) {
+							const allEventsMap = this.cloneEvents()
+							for (const calendarEvent of clientOnlyEventsOfThisMonth) {
+								const dayStart = getStartOfDay(calendarEvent.startTime).getTime()
+								let currentDayEvents = allEventsMap.get(dayStart)
+								if (!currentDayEvents) currentDayEvents = []
+								console.log(`${new Date(dayStart).toLocaleString()}`, currentDayEvents)
+								currentDayEvents.unshift(calendarEvent)
+								allEventsMap.set(dayStart, currentDayEvents)
+							}
+							console.log(allEventsMap)
+							this.replaceEvents(allEventsMap)
+						}
 					} catch (e) {
 						this.loadedMonths.delete(month.start)
 						throw e
@@ -181,5 +199,16 @@ export class CalendarEventsRepository {
 				}
 			}
 		}
+	}
+
+	public pushClientOnlyEvent(startOfMonth: number, newEvent: CalendarEvent) {
+		let clientOnlyEventsOfThisMonth = this.clientOnlyEvents.get(startOfMonth)
+		if (!clientOnlyEventsOfThisMonth) clientOnlyEventsOfThisMonth = []
+		clientOnlyEventsOfThisMonth.push(newEvent)
+		this.clientOnlyEvents.set(startOfMonth, clientOnlyEventsOfThisMonth)
+	}
+
+	public getClientOnlyEvents() {
+		return this.clientOnlyEvents
 	}
 }

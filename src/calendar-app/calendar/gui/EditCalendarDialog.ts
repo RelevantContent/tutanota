@@ -5,11 +5,12 @@ import { TextField, TextFieldType } from "../../../common/gui/base/TextField.js"
 import { lang } from "../../../common/misc/LanguageViewModel.js"
 import type { TranslationKeyType } from "../../../common/misc/TranslationKey.js"
 import { deepEqual, downcast } from "@tutao/tutanota-utils"
-import { AlarmInterval, CalendarType } from "../../../common/calendar/date/CalendarUtils.js"
+import { AlarmInterval, CalendarType, isClientOnlyCalendarType } from "../../../common/calendar/date/CalendarUtils.js"
 import { RemindersEditor } from "./RemindersEditor.js"
 import { generateRandomColor } from "./CalendarGuiUtils.js"
 import { assertValidURL } from "@tutao/tutanota-utils/dist/Utils.js"
 import { isExternalCalendar } from "../../../common/calendar/import/ImportExportUtils.js"
+import { isClientOnlyCalendar } from "../view/CalendarView.js"
 
 export type CalendarProperties = {
 	name: string
@@ -63,7 +64,7 @@ export function showCreateEditCalendarDialog(
 							colorStream(target.value)
 						},
 					}),
-					!shared && !isExternalCalendar(calendarType)
+					!shared && !(isExternalCalendar(calendarType) || isClientOnlyCalendarType(calendarType))
 						? m(RemindersEditor, {
 								alarms,
 								addAlarm: (alarm: AlarmInterval) => {

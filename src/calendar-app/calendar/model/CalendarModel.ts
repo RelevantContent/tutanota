@@ -78,6 +78,7 @@ import { DeviceConfig } from "../../../common/misc/DeviceConfig.js"
 import { locator } from "../../../common/api/main/CommonLocator.js"
 import { EventImportRejectionReason, parseCalendarStringData, sortOutParsedEvents } from "../../../common/calendar/import/ImportExportUtils.js"
 import { UserError } from "../../../common/api/main/UserError.js"
+import { generateRandomColor } from "../gui/CalendarGuiUtils.js"
 
 const TAG = "[CalendarModel]"
 export type CalendarInfo = {

@@ -15,7 +15,17 @@ import {
 	GroupSettings,
 	UserSettingsGroupRoot,
 } from "../../../common/api/entities/tutanota/TypeRefs.js"
-import { defaultCalendarColor, GroupType, Keys, reverse, ShareCapability, TabIndex, TimeFormat, WeekStart } from "../../../common/api/common/TutanotaConstants"
+import {
+	ClientOnlyCalendars,
+	defaultCalendarColor,
+	GroupType,
+	Keys,
+	reverse,
+	ShareCapability,
+	TabIndex,
+	TimeFormat,
+	WeekStart,
+} from "../../../common/api/common/TutanotaConstants"
 import { locator } from "../../../common/api/main/CommonLocator"
 import {
 	CalendarType,
@@ -107,6 +117,7 @@ enum RenderType {
 	Private,
 	Shared,
 	External,
+	ClientOnly,
 }
 
 export class CalendarView extends BaseTopLevelView implements TopLevelView<CalendarViewAttrs> {
@@ -195,7 +206,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 								{
 									name: "otherCalendars_label",
 								},
-								this.renderCalendars([RenderType.Shared, RenderType.External]),
+								this.renderCalendars([RenderType.Shared, RenderType.External, RenderType.ClientOnly]),
 							),
 							this.viewModel.calendarInvitations().length > 0
 								? m(
@@ -730,6 +741,16 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 			return calendars
 		}, [])
 
+		calendarInfosList.push(
+			downcast({
+				groupRoot: { _id: "clientOnly_birthdays" },
+				groupInfo: { name: "Birthdays", group: "clientOnly_birthdays" },
+				group: { _id: "clientOnly_birthdays" },
+				shared: false,
+				userIsOwner: true,
+			}),
+		)
+
 		const filteredCalendarInfos = calendarInfosList.filter((calendarInfo) => {
 			/**
 			 * Dinamically filter calendarInfoList according to the renderTypes
@@ -737,8 +758,16 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 			const conditions: Array<(calendarInfo: CalendarInfo) => boolean> = []
 			for (const renderType of renderTypes) {
 				switch (renderType) {
+					case RenderType.ClientOnly:
+						conditions.push((calendarInfo: CalendarInfo) => isClientOnlyCalendar(calendarInfo.group._id))
+						break
 					case RenderType.Private:
-						conditions.push((calendarInfo: CalendarInfo) => calendarInfo.userIsOwner && !externalCalendars.includes(calendarInfo.group._id))
+						conditions.push(
+							(calendarInfo: CalendarInfo) =>
+								calendarInfo.userIsOwner &&
+								!externalCalendars.includes(calendarInfo.group._id) &&
+								!isClientOnlyCalendar(calendarInfo.group._id),
+						)
 						break
 					case RenderType.Shared:
 						conditions.push((calendarInfo: CalendarInfo) => !calendarInfo.userIsOwner)
@@ -759,13 +788,20 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 	private renderCalendarItem(calendarInfo: CalendarInfo, shared: boolean, setHidden: (viewModel: CalendarViewModel, groupRootId: string) => void) {
 		const { userSettingsGroupRoot } = locator.logins.getUserController()
 		const existingGroupSettings = userSettingsGroupRoot.groupSettings.find((gc) => gc.group === calendarInfo.groupInfo.group) ?? null
-		const colorValue = "#" + (existingGroupSettings ? existingGroupSettings.color : defaultCalendarColor)
+
+		const clientOnlyCalendar = isClientOnlyCalendar(calendarInfo.group._id)
+		const clientOnlyConfig = deviceConfig.getClientOnlyCalendars().get(calendarInfo.group._id)
+
+		const colorValue = "#" + (existingGroupSettings ? existingGroupSettings.color : clientOnlyCalendar ? clientOnlyConfig?.color : defaultCalendarColor)
+		const groupName = clientOnlyCalendar ? clientOnlyConfig?.name : getSharedGroupName(calendarInfo.groupInfo, locator.logins.getUserController(), shared)
+
 		const groupRootId = calendarInfo.groupRoot._id
-		const groupName = getSharedGroupName(calendarInfo.groupInfo, locator.logins.getUserController(), shared)
 		const isHidden = this.viewModel.hiddenCalendars.has(groupRootId)
+
 		const lastSync = deviceConfig.getLastExternalCalendarSync().get(calendarInfo.group._id)
 		const lastSyncDate = lastSync ? new Date(lastSync) : null
 		const lastSyncStr = lastSyncDate ? lang.get("lastSync_label", { "{date}": `${formatDate(lastSyncDate)} at ${formatTime(lastSyncDate)}` }) : ""
+
 		return m(".folder-row.flex-start.plr-button", [
 			m(".flex.flex-grow.center-vertically.button-height", [
 				m(".calendar-checkbox", {
@@ -821,6 +857,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 	): Children {
 		const { group, groupInfo, groupRoot } = calendarInfo
 		const user = locator.logins.getUserController().user
+		const isClientOnly = isClientOnlyCalendar(calendarInfo.group._id)
 		return m(IconButton, {
 			title: "more_label",
 			colors: ButtonColor.Nav,
@@ -834,7 +871,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 						size: ButtonSize.Compact,
 						click: () => this.onPressedEditCalendar(groupInfo, colorValue, existingGroupSettings, userSettingsGroupRoot, sharedCalendar),
 					},
-					!existingGroupSettings?.sourceUrl
+					!existingGroupSettings?.sourceUrl && !isClientOnly
 						? {
 								label: "sharing_label",
 								icon: Icons.ContactImport,
@@ -854,7 +891,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 								click: () => handleCalendarImport(groupRoot),
 						  }
 						: null,
-					!isApp() && group.type === GroupType.Calendar && hasCapabilityOnGroup(user, group, ShareCapability.Read)
+					!isApp() && group.type === GroupType.Calendar && hasCapabilityOnGroup(user, group, ShareCapability.Read) && !isClientOnly
 						? {
 								label: "export_action",
 								icon: Icons.Export,
@@ -879,7 +916,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 								click: () => this.viewModel.syncExternal(existingGroupSettings),
 						  }
 						: null,
-					calendarInfo.userIsOwner
+					calendarInfo.userIsOwner && !isClientOnly
 						? {
 								label: existingGroupSettings?.sourceUrl ? "unsubscribe_action" : "delete_action",
 								icon: Icons.Trash,
@@ -892,7 +929,13 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 	}
 
 	private allowCalendarImport(group: Group, user: User, groupSettings: GroupSettings | null) {
-		return !isApp() && group.type === GroupType.Calendar && hasCapabilityOnGroup(user, group, ShareCapability.Write) && !groupSettings?.sourceUrl
+		return (
+			!isApp() &&
+			group.type === GroupType.Calendar &&
+			hasCapabilityOnGroup(user, group, ShareCapability.Write) &&
+			!groupSettings?.sourceUrl &&
+			!isClientOnlyCalendar(group._id)
+		)
 	}
 
 	private confirmDeleteCalendar(calendarInfo: CalendarInfo) {
@@ -925,8 +968,15 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 		userSettingsGroupRoot: UserSettingsGroupRoot,
 		shared: boolean,
 	) {
+		console.log({
+			groupInfo,
+			colorValue,
+			existingGroupSettings,
+			userSettingsGroupRoot,
+			shared,
+		})
 		showCreateEditCalendarDialog(
-			existingGroupSettings?.sourceUrl ? CalendarType.URL : CalendarType.NORMAL,
+			existingGroupSettings?.sourceUrl ? CalendarType.URL : isClientOnlyCalendar(groupInfo.group) ? CalendarType.CLIENT_ONLY : CalendarType.NORMAL,
 			"edit_action",
 			shared,
 			(dialog, properties) => this.handleModifiedCalendar(dialog, properties, shared, groupInfo, existingGroupSettings, userSettingsGroupRoot),
@@ -1153,4 +1203,8 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 	private hasEventsOn(date: Date): boolean {
 		return daysHaveEvents(this.viewModel.getEventsOnDaysToRender([date]))
 	}
+}
+
+export function isClientOnlyCalendar(calendarId: Id) {
+	return !!ClientOnlyCalendars.get(calendarId)
 }

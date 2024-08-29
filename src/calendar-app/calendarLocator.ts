@@ -60,7 +60,7 @@ import { deviceConfig } from "../common/misc/DeviceConfig.js"
 import { CalendarSearchViewModel } from "./calendar/search/view/CalendarSearchViewModel.js"
 import { SearchRouter } from "../common/search/view/SearchRouter.js"
 import { getEnabledMailAddressesWithUser } from "../common/mailFunctionality/SharedMailUtils.js"
-import { Const, FeatureType, GroupType, KdfType } from "../common/api/common/TutanotaConstants.js"
+import { ClientOnlyCalendars, Const, FeatureType, GroupType, KdfType } from "../common/api/common/TutanotaConstants.js"
 import { ShareableGroupType } from "../common/sharing/GroupUtils.js"
 import { ReceivedGroupInvitationsModel } from "../common/sharing/model/ReceivedGroupInvitationsModel.js"
 import { CalendarViewModel } from "./calendar/view/CalendarViewModel.js"
@@ -110,6 +110,7 @@ import { AppType } from "../common/misc/ClientConstants.js"
 import type { ParsedEvent } from "../common/calendar/import/CalendarImporter.js"
 import { ExternalCalendarFacade } from "../common/native/common/generatedipc/ExternalCalendarFacade.js"
 import { locator } from "../common/api/main/CommonLocator.js"
+import { generateRandomColor } from "./calendar/gui/CalendarGuiUtils.js"
 
 assertMainOrNode()
 
@@ -283,6 +284,7 @@ class CalendarLocator {
 			await this.receivedGroupInvitationsModel(GroupType.Calendar),
 			timeZone,
 			this.mailModel,
+			this.contactModel,
 		)
 	})
 
@@ -845,6 +847,7 @@ class CalendarLocator {
 				const calendarModel = await locator.calendarModel()
 				calendarModel.handleSyncExternalCalendars()
 			},
+			this.setUpClientOnlyCalendars,
 		)
 	})
 
@@ -861,6 +864,15 @@ class CalendarLocator {
 				deviceConfig,
 				false,
 			)
+		}
+	}
+
+	setUpClientOnlyCalendars() {
+		let configs = deviceConfig.getClientOnlyCalendars()
+
+		for (const [clientOnlyCalendar, name] of ClientOnlyCalendars.entries()) {
+			const config = configs.get(clientOnlyCalendar)
+			if (!config) deviceConfig.updateClientOnlyCalendars(clientOnlyCalendar, { name, color: generateRandomColor() })
 		}
 	}
 

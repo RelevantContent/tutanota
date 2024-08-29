@@ -990,4 +990,9 @@ export function parseAlarmInterval(serialized: string): AlarmInterval {
 export enum CalendarType {
 	NORMAL,
 	URL, // External calendar
+	CLIENT_ONLY,
+}
+
+export function isClientOnlyCalendarType(calendarType: CalendarType) {
+	return calendarType === CalendarType.CLIENT_ONLY
 }

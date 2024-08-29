@@ -54,6 +54,7 @@ import {
 import {
 	AccountType,
 	CalendarAttendeeStatus,
+	ClientOnlyCalendars,
 	defaultCalendarColor,
 	EndType,
 	EventTextTimeOption,
@@ -77,6 +78,7 @@ import { EventsOnDays } from "../view/CalendarViewModel.js"
 import { CalendarEventPreviewViewModel } from "./eventpopup/CalendarEventPreviewViewModel.js"
 import { createAsyncDropdown } from "../../../common/gui/base/Dropdown.js"
 import { UserController } from "../../../common/api/main/UserController.js"
+import { deviceConfig } from "../../../common/misc/DeviceConfig.js"
 
 export function renderCalendarSwitchLeftButton(label: TranslationKey, click: () => unknown): Child {
 	return m(IconButton, {
@@ -726,13 +728,19 @@ export const iconForAttendeeStatus: Record<CalendarAttendeeStatus, AllIcons> = O
 	[CalendarAttendeeStatus.ADDED]: Icons.CircleEmpty,
 })
 export const getGroupColors = memoized((userSettingsGroupRoot: UserSettingsGroupRoot) => {
-	return userSettingsGroupRoot.groupSettings.reduce((acc, { group, color }) => {
+	const colors = userSettingsGroupRoot.groupSettings.reduce((acc, { group, color }) => {
 		if (!isValidColorCode("#" + color)) {
 			color = defaultCalendarColor
 		}
 		acc.set(group, color)
 		return acc
 	}, new Map())
+
+	for (const [calendar, _] of ClientOnlyCalendars) {
+		colors.set(calendar, deviceConfig.getClientOnlyCalendars().get(calendar)?.color)
+	}
+
+	return colors
 })
 
 /**

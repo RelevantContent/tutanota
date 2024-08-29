@@ -53,6 +53,7 @@ export class PostLoginActions implements PostLoginAction {
 		private readonly showSetupWizard: () => unknown,
 		private readonly appPartialLoginSuccessActions: () => unknown,
 		private readonly syncExternalCalendars: () => unknown,
+		private readonly setUpClientOnlyCalendars: () => unknown,
 	) {}
 
 	async onPartialLoginSuccess(loggedInEvent: LoggedInEvent): Promise<void> {
@@ -148,6 +149,8 @@ export class PostLoginActions implements PostLoginAction {
 
 			this.syncExternalCalendars()
 		}
+
+		this.setUpClientOnlyCalendars()
 
 		if (this.logins.isGlobalAdminUserLoggedIn() && !isAdminClient()) {
 			const receiveInfoData = createReceiveInfoServiceData({
