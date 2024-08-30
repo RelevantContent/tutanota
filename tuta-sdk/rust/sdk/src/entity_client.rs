@@ -5,7 +5,7 @@ use crate::element_value::{ElementValue, ParsedEntity};
 use crate::generated_id::GeneratedId;
 use crate::json_element::RawEntity;
 use crate::json_serializer::JsonSerializer;
-use crate::metamodel::TypeModel;
+use crate::metamodel::{ElementType, TypeModel};
 use crate::rest_client::{HttpMethod, RestClient, RestClientOptions};
 use crate::rest_error::HttpError;
 use crate::type_model_provider::TypeModelProvider;
@@ -47,40 +47,14 @@ impl EntityClient {
 		type_ref: &TypeRef,
 		id: &Id,
 	) -> Result<ParsedEntity, ApiCallError> {
-		let type_model = self.get_type_model(type_ref)?;
 		let url = format!(
 			"{}/rest/{}/{}/{}",
 			self.base_url, type_ref.app, type_ref.type_, id
 		);
-		let model_version: u32 = type_model.version.parse().map_err(|_| {
-			let message = format!(
-				"Tried to parse invalid model_version {}",
-				type_model.version
-			);
-			ApiCallError::InternalSdkError {
-				error_message: message,
-			}
-		})?;
-		let options = RestClientOptions {
-			body: None,
-			headers: self.auth_headers_provider.provide_headers(model_version),
-		};
-		let response = self
-			.rest_client
-			.request_binary(url, HttpMethod::GET, options)
-			.await?;
-		let precondition = response.headers.get("precondition");
-		match response.status {
-			200..=299 => {
-				// Ok
-			},
-			_ => {
-				return Err(ApiCallError::ServerResponseError {
-					source: HttpError::from_http_response(response.status, precondition)?,
-				})
-			},
-		}
-		let response_bytes = response.body.expect("no body");
+		let response_bytes = self
+			.prepare_and_fire(type_ref, url)
+			.await?
+			.expect("no body");
 		let response_entity =
 			serde_json::from_slice::<RawEntity>(response_bytes.as_slice()).unwrap();
 		let parsed_entity = self.json_serializer.parse(type_ref, response_entity)?;
@@ -115,13 +89,33 @@ impl EntityClient {
 	#[allow(clippy::unused_async)]
 	pub async fn load_range(
 		&self,
-		_type_ref: &TypeRef,
-		_list_id: &GeneratedId,
-		_start_id: &GeneratedId,
-		_count: usize,
-		_list_load_direction: ListLoadDirection,
+		type_ref: &TypeRef,
+		list_id: &GeneratedId,
+		start_id: &GeneratedId,
+		count: usize,
+		direction: ListLoadDirection,
 	) -> Result<Vec<ParsedEntity>, ApiCallError> {
-		todo!("entity client load_range")
+		let type_model = self.get_type_model(type_ref)?;
+		assert_eq!(type_model.element_type, ElementType::ListElement);
+		// FIXME: validate parameters
+		let reverse = direction == ListLoadDirection::DESC;
+		// TODO: this is not the best way to build URL, we assume that everything is URL safe
+		// TODO: custom ids? are they fine?
+		let url = format!(
+			"{}/rest/{}/{}/{}?start_id={start_id}&count={count}&reverse={reverse}",
+			self.base_url, type_ref.app, type_ref.type_, list_id
+		);
+		let response_bytes = self
+			.prepare_and_fire(type_ref, url)
+			.await?
+			.expect("no body");
+		let response_entities = serde_json::from_slice::<Vec<RawEntity>>(response_bytes.as_slice())
+			.expect("invalid response");
+		let parsed_entities = response_entities
+			.into_iter()
+			.map(|e| self.json_serializer.parse(type_ref, e))
+			.collect::<Result<Vec<_>, _>>()?;
+		Ok(parsed_entities)
 	}
 
 	/// Stores a newly created entity/instance as a single element on the backend
@@ -188,6 +182,35 @@ impl EntityClient {
 	) -> Result<(), ApiCallError> {
 		todo!("entity client erase_list_element")
 	}
+
+	async fn prepare_and_fire(
+		&self,
+		type_ref: &TypeRef,
+		url: String,
+	) -> Result<Option<Vec<u8>>, ApiCallError> {
+		let type_model = self.get_type_model(type_ref)?;
+		let model_version: u32 = type_model.version.parse().expect("invalid model_version");
+		let options = RestClientOptions {
+			body: None,
+			headers: self.auth_headers_provider.provide_headers(model_version),
+		};
+		let response = self
+			.rest_client
+			.request_binary(url, HttpMethod::GET, options)
+			.await?;
+		let precondition = response.headers.get("precondition");
+		match response.status {
+			200..=299 => {
+				// Ok
+			},
+			_ => {
+				return Err(ApiCallError::ServerResponseError {
+					source: HttpError::from_http_response(response.status, precondition)?,
+				})
+			},
+		}
+		Ok(response.body)
+	}
 }
 
 #[cfg(test)]
@@ -206,13 +229,13 @@ mockall::mock! {
 			type_ref: &TypeRef,
 			id: &Id,
 		 ) -> Result<ParsedEntity, ApiCallError>;
-		async fn load_all(
+		pub async fn load_all(
 			&self,
 			type_ref: &TypeRef,
 			list_id: &IdTuple,
 			start: Option<String>,
 		) -> Result<Vec<ParsedEntity>, ApiCallError>;
-		async fn load_range(
+		pub async fn load_range(
 			&self,
 			type_ref: &TypeRef,
 			list_id: &GeneratedId,
@@ -220,16 +243,16 @@ mockall::mock! {
 			count: usize,
 			list_load_direction: ListLoadDirection,
 		) -> Result<Vec<ParsedEntity>, ApiCallError>;
-		async fn setup_element(&self, type_ref: &TypeRef, entity: RawEntity) -> Vec<String>;
-		async fn setup_list_element(
+		pub async fn setup_element(&self, type_ref: &TypeRef, entity: RawEntity) -> Vec<String>;
+		pub async fn setup_list_element(
 			&self,
 			type_ref: &TypeRef,
 			list_id: &IdTuple,
 			entity: RawEntity,
 		) -> Vec<String>;
-		async fn update(&self, type_ref: &TypeRef, entity: ParsedEntity, model_version: u32)
+		pub async fn update(&self, type_ref: &TypeRef, entity: ParsedEntity, model_version: u32)
 						-> Result<(), ApiCallError>;
-		async fn erase_element(&self, type_ref: &TypeRef, id: &GeneratedId) -> Result<(), ApiCallError>;
-		async fn erase_list_element(&self, type_ref: &TypeRef, id: IdTuple) -> Result<(), ApiCallError>;
+		pub async fn erase_element(&self, type_ref: &TypeRef, id: &GeneratedId) -> Result<(), ApiCallError>;
+		pub async fn erase_list_element(&self, type_ref: &TypeRef, id: IdTuple) -> Result<(), ApiCallError>;
 	}
 }

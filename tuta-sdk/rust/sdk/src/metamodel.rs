@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 
 /// A kind of element that can appear in the model
-#[derive(Deserialize, PartialEq, Clone)]
+#[derive(Deserialize, PartialEq, Clone, Debug)]
 pub enum ElementType {
 	/// Entity referenced by a single id
 	#[serde(rename = "ELEMENT_TYPE")]
