@@ -62,11 +62,22 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		TUTSLog("Contact SAVE finished")
 	}
 
+	private func getAllContacts(_ username: String) async throws -> [StructuredContact] {
+		let store = CNContactStore()
+		let containers = try store.containers(matching: nil)
+		guard let localContainer = containers.first(where: { $0.type == CNContainerType.local }) else {
+			throw TUTErrorFactory.createError("No local container present for contacts.")
+		}
+		let contacts = try await getContactsInContactBook(localContainer.identifier, username)
+		return contacts
+	}
+
 	func syncContacts(_ username: String, _ contacts: [StructuredContact]) async throws -> ContactSyncResult {
 		TUTSLog("MobileContactsFacade: sync with \(contacts.count) contacts")
 		try await acquireContactsPermission()
 		var mapping = try self.getOrCreateMapping(username: username)
 		let matchResult = try self.matchStoredContacts(against: contacts, forUser: &mapping)
+		let duplicateResult = try await self.matchStoredContacts(against: getAllContacts(username), forUser: &mapping)
 		TUTSLog(
 			"Contact SYNC result: createdOnDevice: \(matchResult.createdOnDevice.count) editedOnDevice: \(matchResult.editedOnDevice.count) deletedOnDevice: \(matchResult.deletedOnDevice.count) newServerContacts: \(matchResult.newServerContacts.count) deletedOnServer: \(matchResult.deletedOnServer.count) existingServerContacts: \(matchResult.existingServerContacts.count) nativeContactWithoutSourceId: \(matchResult.nativeContactWithoutSourceId.count)"
 		)
@@ -100,7 +111,7 @@ class IosMobileContactsFacade: MobileContactsFacade {
 	}
 
 	func getContactsInContactBook(_ containerId: String, _ username: String) async throws -> [StructuredContact] {
-		assert(containerId == CONTACT_BOOK_ID, "Invalid contact book: \(containerId)")
+		// assert(containerId == CONTACT_BOOK_ID, "Invalid contact book: \(containerId)")
 		try await acquireContactsPermission()
 
 		let fetch = CNContactFetchRequest(keysToFetch: ALL_SUPPORTED_CONTACT_KEYS)
