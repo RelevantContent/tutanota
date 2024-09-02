@@ -12,6 +12,8 @@ import { Dialog } from "../../common/gui/base/Dialog.js"
 import { mailLocator } from "../mailLocator.js"
 import { UpdatableSettingsViewer } from "../../common/settings/Interfaces.js"
 import { assert } from "@tutao/tutanota-utils"
+import { PermissionType } from "../../common/native/common/generatedipc/PermissionType"
+import { verifyContactSyncAllowedOnIos } from "../contacts/view/ContactGuiUtils"
 
 assertMainOrNode()
 
@@ -92,24 +94,9 @@ export class ContactsSettingsViewer implements UpdatableSettingsViewer {
 					value: false,
 				},
 			],
-			selectedValue: mailLocator.nativeContactsSyncManager()?.isEnabled(),
-			selectionChangedHandler: (contactSyncEnabled: boolean) => {
-				if (isApp()) {
-					if (!contactSyncEnabled) {
-						mailLocator.nativeContactsSyncManager()?.disableSync()
-					} else {
-						mailLocator.nativeContactsSyncManager()?.enableSync()
-						// We just enable if the synchronization started successfully
-						mailLocator
-							.nativeContactsSyncManager()
-							?.syncContacts()
-							.then((allowed) => {
-								if (!allowed) {
-									this.handleContactsSynchronizationFail()
-								}
-							})
-					}
-				}
+			selectedValue: mailLocator.nativeContactsSyncManager().isEnabled(),
+			selectionChangedHandler: async (contactSyncEnabled: boolean) => {
+				await this.onContactSyncSelectionChanged(contactSyncEnabled)
 			},
 			dropdownWidth: 250,
 		})
@@ -122,33 +109,17 @@ export class ContactsSettingsViewer implements UpdatableSettingsViewer {
 		if (!contactSyncEnabled) {
 			syncManager.disableSync()
 		} else {
-			if (await syncManager.shouldWarnAboutICloudSync()) {
-				// FIXME: translate
-				const choice = await Dialog.choice<"cancel" | "settings" | "enable">(
-					() => "iCloud sync for contacts is enabled on your device. Please disable it to avoid issues with contacts.",
-					[
-						{ text: "cancel_action", value: "cancel" },
-						{ text: () => "Go to Settings", value: "settings" },
-						{ text: () => "Enable anyway", value: "enable" },
-					],
-				)
-				switch (choice) {
-					case "cancel":
-						return
-					case "settings":
-						locator.systemFacade.openLink("App-prefs:CASTLE")
-						return
-					case "enable":
-						break
-				}
+			const canSync = await verifyContactSyncAllowedOnIos(syncManager)
+			if (!canSync) {
+				return
 			}
+
 			syncManager.enableSync()
 			// We just enable if the synchronization started successfully
-			syncManager.syncContacts().then((allowed) => {
-				if (!allowed) {
-					this.handleContactsSynchronizationFail()
-				}
-			})
+			const isSyncAllowed = await syncManager.syncContacts()
+			if (!isSyncAllowed) {
+				this.handleContactsSynchronizationFail()
+			}
 		}
 	}
 

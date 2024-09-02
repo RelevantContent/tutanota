@@ -33,9 +33,10 @@ import { ContactViewModel } from "./contacts/view/ContactViewModel.js"
 import { ContactListViewModel } from "./contacts/view/ContactListViewModel.js"
 import type { CredentialsMigrationView, CredentialsMigrationViewAttrs } from "../common/login/CredentialsMigrationView.js"
 import type { CredentialsMigrationViewModel } from "../common/login/CredentialsMigrationViewModel.js"
-import { assertMainOrNodeBoot, bootFinished, isApp, isDesktop, isOfflineStorageAvailable } from "../common/api/common/Env.js"
+import { assertMainOrNodeBoot, bootFinished, isApp, isDesktop, isIOSApp, isOfflineStorageAvailable } from "../common/api/common/Env.js"
 import { SettingsViewAttrs } from "../common/settings/Interfaces.js"
 import { disableErrorHandlingDuringLogout, handleUncaughtError } from "../common/misc/ErrorHandler.js"
+import { verifyContactSyncAllowedOnIos } from "./contacts/view/ContactGuiUtils.js"
 
 assertMainOrNodeBoot()
 bootFinished()
@@ -121,7 +122,15 @@ import("./translations/en.js")
 				async onPartialLoginSuccess() {
 					if (isApp()) {
 						mailLocator.fileApp.clearFileData().catch((e) => console.log("Failed to clean file data", e))
-						mailLocator.nativeContactsSyncManager()?.syncContacts()
+						const syncManager = mailLocator.nativeContactsSyncManager()
+						if (syncManager.isEnabled() && isIOSApp()) {
+							const canSync = await verifyContactSyncAllowedOnIos(syncManager)
+							if (!canSync) {
+								await syncManager.disableSync()
+								return
+							}
+						}
+						syncManager.syncContacts()
 					}
 				},
 				async onFullLoginSuccess() {},

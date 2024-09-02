@@ -11,6 +11,12 @@ import type { TranslationKey } from "../../../common/misc/LanguageViewModel"
 import { lang } from "../../../common/misc/LanguageViewModel"
 import type { Contact } from "../../../common/api/entities/tutanota/TypeRefs.js"
 import { sortCompareByReverseId } from "../../../common/api/common/utils/EntityUtils"
+import { locator } from "../../../common/api/main/CommonLocator"
+import { PermissionType } from "../../../common/native/common/generatedipc/PermissionType"
+import { NativeContactsSyncManager } from "../model/NativeContactsSyncManager"
+import { Dialog } from "../../../common/gui/base/Dialog"
+import { isIOSApp, isTest } from "../../../common/api/common/Env"
+import { assert } from "@tutao/tutanota-utils"
 
 export const ContactMailAddressTypeToLabel: Record<ContactAddressType, TranslationKey> = {
 	[ContactAddressType.PRIVATE]: "private_label",
@@ -200,4 +206,42 @@ export function compareContacts(contact1: Contact, contact2: Contact, sortByFirs
 			return result
 		}
 	}
+}
+
+/**
+ * Check that we are allowed to sync contacts on an iOS device
+ * @param syncManager
+ * @returns false if no permission or iCloud sync is enabled and the user cancelled, or true if permission is granted and iCloud sync is disabled (or the user bypassed the warning dialog)
+ */
+export async function verifyContactSyncAllowedOnIos(syncManager: NativeContactsSyncManager): Promise<boolean> {
+	assert(isIOSApp() || isTest(), "Can only check iOS Contacts permissions on iOS app")
+
+	// Check whether the contacts permission is granted to avoid false positive from `shouldWarnAboutICloudSync()`
+	const isContactPermissionGranted = await locator.systemPermissionHandler.requestPermission(PermissionType.Contacts, "allowContactReadWrite_msg")
+	if (!isContactPermissionGranted) {
+		return false
+	}
+
+	if (await syncManager.shouldWarnAboutICloudSync()) {
+		// FIXME: translate
+		const choice = await Dialog.choice<"cancel" | "settings" | "enable">(
+			() => "iCloud sync for contacts is enabled on your device. Please disable it to avoid issues with contacts.",
+			[
+				{ text: "cancel_action", value: "cancel" },
+				{ text: () => "Go to Settings", value: "settings" },
+				{ text: () => "Sync anyway", value: "enable" },
+			],
+		)
+		switch (choice) {
+			case "enable":
+				break
+			case "settings":
+				locator.systemFacade.openLink("App-prefs:CASTLE")
+				return false
+			case "cancel":
+				return false
+		}
+	}
+
+	return true
 }
