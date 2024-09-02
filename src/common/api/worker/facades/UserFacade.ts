@@ -73,7 +73,7 @@ export class UserFacade implements AuthDataProvider {
 		this.keyCache.setUserGroupKeyDistributionKey(userGroupKeyDistributionKey)
 	}
 
-	deriveUserGroupKeyDistributionKey(userGroupId: Id, userPassphraseKey: number[]) {
+	deriveUserGroupKeyDistributionKey(userGroupId: Id, userPassphraseKey: number[]): AesKey {
 		// we prepare a key to encrypt potential user group key rotations with
 		// when passwords are changed clients are logged-out of other sessions
 		// this key is only needed by the logged-in clients, so it should be reliable enough to assume that userPassphraseKey is in sync
