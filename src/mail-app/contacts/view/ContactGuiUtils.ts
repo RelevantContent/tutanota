@@ -225,7 +225,8 @@ export async function verifyContactSyncAllowedOnIos(syncManager: NativeContactsS
 	if (await syncManager.shouldWarnAboutICloudSync()) {
 		// FIXME: translate
 		const choice = await Dialog.choice<"cancel" | "settings" | "enable">(
-			() => "iCloud sync for contacts is enabled on your device. Please disable it to avoid issues with contacts.",
+			() =>
+				"Contact synchronization is enabled for iCloud or another contact app on your device. Please disable any other apps that synchronize contacts to avoid issues with syncing Tuta contacts.",
 			[
 				{ text: "cancel_action", value: "cancel" },
 				{ text: () => "Go to Settings", value: "settings" },
@@ -236,7 +237,7 @@ export async function verifyContactSyncAllowedOnIos(syncManager: NativeContactsS
 			case "enable":
 				break
 			case "settings":
-				locator.systemFacade.openLink("App-prefs:CASTLE")
+				locator.systemFacade.openLink("App-prefs:CONTACTS&path=ACCOUNTS")
 				return false
 			case "cancel":
 				return false
