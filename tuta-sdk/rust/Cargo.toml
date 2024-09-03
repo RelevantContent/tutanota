@@ -4,5 +4,6 @@ resolver = "2"
 
 members = [
     "sdk",
-    "uniffi-bingen"
+    "uniffi-bingen",
+    "demo",
 ]
