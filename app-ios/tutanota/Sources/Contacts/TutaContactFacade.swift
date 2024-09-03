@@ -6,15 +6,30 @@
 //
 
 import Foundation
+import DictionaryCoding
+import Contacts
 
+private let CONTACTS_MAPPINGS = "ContactsMappings"
+
+/// Manages the available `UserContactMapping`s
 class TutaContactFacade {
-	
-	private func getMappingsDictionary() -> [String: [String: Any]] {
-		self.userDefaults.dictionary(forKey: CONTACTS_MAPPINGS) as! [String: [String: Any]]? ?? [:]
+	private let nativeContactStoreFacade: NativeContactStoreFacade
+	private let userDefaults: UserDefaults
 
+	init(userDefault: UserDefaults) {
+		nativeContactStoreFacade = NativeContactStoreFacade()
+		self.userDefaults = userDefault
 	}
 
-	private func getMapping(username: String) -> UserContactMapping? {
+	func getLocalContainer() -> String {
+		return nativeContactStoreFacade.getLocalContainer()
+	}
+
+	private func getMappingsDictionary() -> [String: [String: Any]] {
+		self.userDefaults.dictionary(forKey: CONTACTS_MAPPINGS) as! [String: [String: Any]]? ?? [:]
+	}
+
+	func getContactList(username: String) -> UserContactList? {
 		if var dict = getMappingsDictionary()[username] {
 			// migration from the version that didn't have hashes
 			if dict["localContactIdentifierToHash"] == nil { dict["localContactIdentifierToHash"] = [String: UInt32]() }
@@ -24,87 +39,45 @@ class TutaContactFacade {
 				dict["localContactIdentifierToHash"] = (dict["localContactIdentifierToHash"] as! [String: Int]).mapValues { UInt32($0 & 0xFFFFFFFF) }
 				dict["stablehash"] = true
 			}
-			return try! DictionaryDecoder().decode(UserContactMapping.self, from: dict)
+			let mapping = try! DictionaryDecoder().decode(UserContactMapping.self, from: dict)
+			return try! UserContactList(nativeContactStoreFacade: self.nativeContactStoreFacade, username: username, mappingData: mapping, stableHash: true)
 		} else {
 			return nil
 		}
 	}
 
-	private func saveMapping(_ mapping: UserContactMapping, forUsername username: String) {
+	func saveContactList(_ contactList: UserContactList) {
 		var dict = getMappingsDictionary()
-		dict[username] = try! DictionaryEncoder().encode(mapping)
+		let mapping = contactList.getMapping()
+		dict[mapping.username] = try! DictionaryEncoder().encode(mapping)
 		self.userDefaults.setValue(dict, forKey: CONTACTS_MAPPINGS)
 	}
 
-	private func deleteMapping(forUsername username: String) {
+	func deleteContactList(_ contactList: UserContactList) throws {
+		let group = try contactList.getTutaContactGroup()
 		var dict = getMappingsDictionary()
-		dict.removeValue(forKey: username)
+		let mapping = contactList.getMapping()
+		dict.removeValue(forKey: mapping.username)
 		self.userDefaults.setValue(dict, forKey: CONTACTS_MAPPINGS)
+		try self.nativeContactStoreFacade.deleteCNGroup(forGroup: group)
 	}
 
-	/// Gets the Tuta contact group, creating it if it does not exist.
-	private func getTutaContactGroup(forUser mapping: inout UserContactMapping) throws -> CNGroup {
-		let store = CNContactStore()
-
-		let result = try store.groups(matching: CNGroup.predicateForGroups(withIdentifiers: [mapping.systemGroupIdentifier]))
-		if !result.isEmpty {
-			return result[0]
-		} else {
-			TUTSLog("can't get tuta contact group \(mapping.username) from native: likely deleted by user")
-
-			let newGroup = try self.createCNGroup(username: mapping.username)
-
-			// update mapping right away so that everyone down the road will be using an updated version
-			mapping.systemGroupIdentifier = newGroup.identifier
-			// if the group is not there none of the mapping values make sense anymore
-			mapping.localContactIdentifierToServerId = [:]
-			mapping.localContactIdentifierToHash = [:]
-
-			// save the mapping right away so that if something later fails we won;t have a dangling group
-			self.saveMapping(mapping, forUsername: mapping.username)
-			return newGroup
-		}
-	}
-
-	private func getOrCreateMapping(username: String) throws -> UserContactMapping {
-		if let mapping = self.getMapping(username: username) {
+	func getOrCreateContactList(username: String) throws -> UserContactList {
+		if let mapping = self.getContactList(username: username) {
 			return mapping
 		} else {
 			TUTSLog("MobileContactsFacade: creating new mapping for \(username)")
-			let newGroup = try self.createCNGroup(username: username)
-			let mapping = UserContactMapping(
+			let mapping = try UserContactList(
+				nativeContactStoreFacade: self.nativeContactStoreFacade,
 				username: username,
-				systemGroupIdentifier: newGroup.identifier,
-				localContactIdentifierToServerId: [:],
-				localContactIdentifierToHash: [:],
+				mappingData: nil,
 				stableHash: true
 			)
-
-			self.saveMapping(mapping, forUsername: username)
+			self.saveContactList(mapping)
 			return mapping
 		}
 	}
-	func insert(contacts: [StructuredContact], forUser user: inout UserContactMapping) {
-		let contactGroup = try self.getTutaContactGroup(forUser: &user)
-		
-		// We need store mapping from our contact id to native contact id but we get it only after actually saving the contacts,
-		// so until we execute the save request we keep track of the mapping
-		var insertedContacts = [(NativeMutableContact, StructuredContact)]()
-		for newContact in contacts {
-			if let contactId = newContact.id {
-				let nativeContact = NativeMutableContact(newContactWithServerId: contactId, container: localContainer)
-				nativeContact.updateContactWithData(newContact)
-				insertedContacts.append((nativeContact, newContact))
-			}
-		}
-
-		NativeContactStoreFacade().insert(contacts: insertedContacts.map {$0.0}, toGroup: contactGroup)
-
-		for (nativeContact, structuredContact) in insertedContacts {
-			user.localContactIdentifierToServerId[nativeContact.contact.identifier] = structuredContact.id
-			user.localContactIdentifierToHash[nativeContact.contact.identifier] = structuredContact.stableHash()
-		}
-	}
+	
 }
 
 extension CNContact {
@@ -134,5 +107,38 @@ extension CNContact {
 			title: namePrefix,
 			role: jobTitle
 		)
+	}
+}
+
+extension DateComponents {
+	func toIso() -> String? {
+		if let year, let month, let day {
+			String(format: "%04d-%02d-%02d", year, month, day)
+		} else if let month, let day {
+			String(format: "--%02d-%02d", month, day)
+		} else {
+			nil
+		}
+	}
+	static func fromIso(_ iso: String) -> DateComponents? {
+		guard let date = Date.fromIso(iso) else { return nil }
+		return Calendar(identifier: Calendar.Identifier.gregorian).dateComponents([.year, .day, .month], from: date)
+	}
+}
+
+extension Date {
+	static func fromIso(_ iso: String) -> Date? {
+		let formatter = ISO8601DateFormatter()
+		formatter.formatOptions = [.withFullDate]
+
+		return formatter.date(from: iso)
+	}
+}
+
+extension NSDateComponents {
+	func toIso() -> String { String(format: "%04d-%02d-%02d", year, month, day) }
+	static func fromIso(_ iso: String) -> NSDateComponents? {
+		guard let date = DateComponents.fromIso(iso) else { return nil }
+		return date as NSDateComponents
 	}
 }

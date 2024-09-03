@@ -66,7 +66,7 @@ class NativeMutableContact {
 	}
 }
 
-private extension StructuredMailAddress {
+extension StructuredMailAddress {
 	func toLabeledValue() -> CNLabeledValue<NSString> {
 		let label =
 			switch self.type {
@@ -79,7 +79,7 @@ private extension StructuredMailAddress {
 	}
 }
 
-private extension StructuredPhoneNumber {
+extension StructuredPhoneNumber {
 	func toLabeledValue() -> CNLabeledValue<CNPhoneNumber> {
 		let label =
 			switch self.type {
@@ -95,7 +95,7 @@ private extension StructuredPhoneNumber {
 	}
 }
 
-private extension CNLabeledValue<CNContactRelation> {
+extension CNLabeledValue<CNContactRelation> {
 	func toStructuredRelationship() -> StructuredRelationship {
 		let (type, label): (ContactRelationshipType, String?) =
 			switch self.label {
@@ -115,7 +115,7 @@ private extension CNLabeledValue<CNContactRelation> {
 	}
 }
 
-private extension StructuredRelationship {
+extension StructuredRelationship {
 	func toLabeledValue() -> CNLabeledValue<CNContactRelation> {
 		let label =
 			switch self.type {
@@ -144,7 +144,7 @@ private enum StructuredMessengerHandleTypeName: String {
 	case discord = "Discord"
 }
 
-private extension CNLabeledValue<CNInstantMessageAddress> {
+extension CNLabeledValue<CNInstantMessageAddress> {
 	func toStructuredMessengerHandle() -> StructuredMessengerHandle {
 		let (type, label): (ContactMessengerHandleType, String?) =
 			switch self.value.service {
@@ -158,7 +158,7 @@ private extension CNLabeledValue<CNInstantMessageAddress> {
 	}
 }
 
-private extension StructuredMessengerHandle {
+extension StructuredMessengerHandle {
 	func toLabeledValue() -> CNLabeledValue<CNInstantMessageAddress> {
 		let label =
 			switch self.type {
@@ -173,7 +173,7 @@ private extension StructuredMessengerHandle {
 	}
 }
 
-private extension CNLabeledValue<NSDateComponents> {
+extension CNLabeledValue<NSDateComponents> {
 	func toStructuredCustomDate() -> StructuredCustomDate {
 		let (type, label): (ContactCustomDateType, String?) =
 			switch self.label {
@@ -185,7 +185,7 @@ private extension CNLabeledValue<NSDateComponents> {
 	}
 }
 
-private extension StructuredCustomDate {
+extension StructuredCustomDate {
 	func toLabeledValue() -> CNLabeledValue<NSDateComponents>? {
 		guard let date = NSDateComponents.fromIso(self.dateIso) else { return nil }
 		let label =
@@ -198,7 +198,7 @@ private extension StructuredCustomDate {
 	}
 }
 
-private extension CNLabeledValue<CNPhoneNumber> {
+extension CNLabeledValue<CNPhoneNumber> {
 	func toStructuredPhoneNumber() -> StructuredPhoneNumber {
 		let (type, label): (ContactPhoneNumberType, String?) =
 			switch self.label {
@@ -213,7 +213,7 @@ private extension CNLabeledValue<CNPhoneNumber> {
 	}
 }
 
-private extension CNLabeledValue<NSString> {
+extension CNLabeledValue<NSString> {
 	func toStructuredMailAddress() -> StructuredMailAddress {
 		let (type, label): (ContactAddressType, String?) =
 			switch self.label {
@@ -236,7 +236,7 @@ private extension CNLabeledValue<NSString> {
 	}
 }
 
-private extension StructuredAddress {
+extension StructuredAddress {
 	func toLabeledValue() -> CNLabeledValue<CNPostalAddress> {
 		let label =
 			switch self.type {
@@ -253,7 +253,7 @@ private extension StructuredAddress {
 	}
 }
 
-private extension StructuredWebsite {
+extension StructuredWebsite {
 	func toLabeledValue() -> CNLabeledValue<NSString> {
 		let label =
 			switch self.type {
@@ -266,7 +266,7 @@ private extension StructuredWebsite {
 	}
 }
 
-private extension CNLabeledValue<CNPostalAddress> {
+extension CNLabeledValue<CNPostalAddress> {
 	func toStructuredAddress() -> StructuredAddress {
 		let (type, label): (ContactAddressType, String?) =
 			switch self.label {
@@ -280,7 +280,7 @@ private extension CNLabeledValue<CNPostalAddress> {
 	}
 }
 
-private extension Hashable {
+extension Hashable {
 	func computeHash() -> Int {
 		var hasher = Hasher()
 		hasher.combine(self)

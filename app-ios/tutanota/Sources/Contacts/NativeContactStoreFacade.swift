@@ -39,6 +39,10 @@ class NativeContactStoreFacade {
 		}
 	}()
 
+	func getLocalContainer() -> String {
+		return localContainer
+	}
+
 	func createCNGroup(username: String) throws -> CNMutableGroup {
 		let newGroup = CNMutableGroup()
 		newGroup.name = "Tuta \(username)"
@@ -50,10 +54,14 @@ class NativeContactStoreFacade {
 
 		return newGroup
 	}
-	
 
-	func deleteAllContacts(forGroup group: CNGroup) throws {
+	func loadCNGroup(withIdentifier: String) throws -> CNGroup? {
+		let store = CNContactStore()
+		let groups = try store.groups(matching: CNGroup.predicateForGroups(withIdentifiers: [withIdentifier]))
+		return groups.first
+	}
 
+	func deleteCNGroup(forGroup group: CNGroup) throws {
 		// we now need to create a request to remove all contacts from the user that match an id in idsToRemove
 		// it is OK if we are missing some contacts, as they are likely already deleted
 		let store = CNContactStore()
@@ -65,6 +73,22 @@ class NativeContactStoreFacade {
 		try self.enumerateContactsInContactStore(store, with: fetch) { contact, _ in save.delete(contact.mutableCopy() as! CNMutableContact) }
 
 		try store.execute(save)
+
+		// Delete the group itself
+		let saveRequest = CNSaveRequest()
+		saveRequest.delete(group.mutableCopy() as! CNMutableGroup)
+		try store.execute(saveRequest)
+	}
+
+	func getAllContacts(inGroup group: CNGroup) throws -> [CNContact] {
+		let store = CNContactStore()
+		let fetch = makeContactFetchRequest()
+		fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier)
+
+		var contacts = [CNContact]()
+		try self.enumerateContactsInContactStore(store, with: fetch) { contact, _ in contacts.append(contact) }
+
+		return contacts
 	}
 
 	func insert(contacts: [NativeMutableContact], toGroup group: CNGroup) throws {
@@ -77,6 +101,30 @@ class NativeContactStoreFacade {
 		}
 
 		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not insert contacts", underlyingError: error) }
+	}
+
+	func update(contacts: [NativeMutableContact]) throws {
+		let store = CNContactStore()
+		let saveRequest = CNSaveRequest()
+
+		for nativeMutableContact in contacts {
+			saveRequest.update(nativeMutableContact.contact)
+		}
+
+		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not update contacts", underlyingError: error) }
+	}
+
+	func delete(localContacts nativeIdentifiersToRemove: [String]) throws {
+		
+		let store = CNContactStore()
+		let fetch = makeContactFetchRequest(forKeys: [CNContactIdentifierKey] as [CNKeyDescriptor])
+
+		fetch.predicate = CNContact.predicateForContacts(withIdentifiers: nativeIdentifiersToRemove)
+		let save = CNSaveRequest()
+
+		try self.enumerateContactsInContactStore(store, with: fetch) { contact, _ in save.delete(contact.mutableCopy() as! CNMutableContact) }
+
+		try store.execute(save)
 	}
 
 	func enumerateContactsInContactStore(

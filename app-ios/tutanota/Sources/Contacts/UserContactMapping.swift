@@ -1,0 +1,114 @@
+//
+//  UserContactMapping.swift
+//  tutanota
+//
+//  Created by Tutao GmbH on 03.09.24.
+//
+
+import Foundation
+import Contacts
+
+struct UserContactMapping: Codable {
+	let username: String
+	var systemGroupIdentifier: String
+	var localContactIdentifierToServerId: [String: String]
+	var localContactIdentifierToHash: [String: UInt32]
+	/// Whether we use Swift's built-in Hasher that is seeded randomly or our own hashing that is stable between runs
+	var stableHash: Bool?
+}
+
+/// Used to perform operations on an iOS contact list while keeping track of the links to the server contacts
+class UserContactList {
+	private let nativeContactStoreFacade: NativeContactStoreFacade
+	private var mappingData: UserContactMapping
+
+	init(nativeContactStoreFacade: NativeContactStoreFacade, username: String, mappingData: UserContactMapping?, stableHash: Bool? = nil) throws {
+		self.nativeContactStoreFacade = nativeContactStoreFacade
+		let group = try getTutaContactGroup()
+		self.mappingData = mappingData ?? UserContactMapping(
+			username: username,
+			systemGroupIdentifier: group.identifier,
+			localContactIdentifierToServerId: [:],
+			localContactIdentifierToHash: [:],
+			stableHash: stableHash
+		)
+	}
+
+	func getMapping() -> UserContactMapping {
+		return mappingData
+	}
+
+	func getAllContacts() throws -> [CNContact] {
+		return try nativeContactStoreFacade.getAllContacts(inGroup: getTutaContactGroup())
+	}
+
+	func insert(contacts: [StructuredContact]) throws {
+		let contactGroup = try self.getTutaContactGroup()
+
+		// We need store mapping from our contact id to native contact id but we get it only after actually saving the contacts,
+		// so until we execute the save request we keep track of the mapping
+		var insertedContacts = [(NativeMutableContact, StructuredContact)]()
+		for newContact in contacts {
+			if let contactId = newContact.id {
+				let nativeContact = NativeMutableContact(newContactWithServerId: contactId, container: nativeContactStoreFacade.getLocalContainer())
+				nativeContact.updateContactWithData(newContact)
+				insertedContacts.append((nativeContact, newContact))
+
+				mappingData.localContactIdentifierToServerId[nativeContact.contact.identifier] = newContact.id
+				mappingData.localContactIdentifierToHash[nativeContact.contact.identifier] = newContact.stableHash()
+			}
+		}
+
+		try nativeContactStoreFacade.insert(contacts: insertedContacts.map {$0.0}, toGroup: contactGroup)
+	}
+
+	func update(contacts: [(NativeMutableContact, StructuredContact)]) throws {
+		var mutableContacts = [NativeMutableContact]()
+		for (nativeMutableContact, serverContact) in contacts {
+			mappingData.localContactIdentifierToHash[nativeMutableContact.contact.identifier] = serverContact.stableHash()
+			nativeMutableContact.updateContactWithData(serverContact)
+			mutableContacts.append(nativeMutableContact)
+		}
+		try nativeContactStoreFacade.update(contacts: mutableContacts)
+	}
+
+	func delete(contactsWithServerIDs serverIdsToDelete: [String]) throws {
+		// we now need to create a request to remove all contacts from the user that match an id in idsToRemove
+		// it is OK if we are missing some contacts, as they are likely already deleted
+
+		var serverIdToLocalIdentifier = [String: String]()
+		// doing it manually in case we have duplicates (which isn't good but might happen)
+		for (localIdentifier, serverId) in mappingData.localContactIdentifierToServerId { serverIdToLocalIdentifier[serverId] = localIdentifier }
+
+		let localAndServerIds = serverIdsToDelete.map { (serverId: $0, localIdentifier: serverIdToLocalIdentifier[$0]) }
+		let nativeIdentifiersToRemove = localAndServerIds.compactMap { $0.localIdentifier }
+		try nativeContactStoreFacade.delete(localContacts: nativeIdentifiersToRemove)
+
+		for (localIdentifier, _) in localAndServerIds {
+			mappingData.localContactIdentifierToServerId.removeValue(forKey: localIdentifier)
+			mappingData.localContactIdentifierToHash.removeValue(forKey: localIdentifier)
+		}
+	}
+
+	/// Gets the Tuta contact group, creating it if it does not exist.
+	func getTutaContactGroup() throws -> CNGroup {
+		if let group = try nativeContactStoreFacade.loadCNGroup(withIdentifier: mappingData.systemGroupIdentifier) {
+			return group
+		} else {
+			TUTSLog("can't get tuta contact group \(mappingData.username) from native: likely deleted by user")
+
+			let newGroup = try nativeContactStoreFacade.createCNGroup(username: mappingData.username)
+
+			// update mapping right away so that everyone down the road will be using an updated version
+			mappingData.systemGroupIdentifier = newGroup.identifier
+			// if the group is not there none of the mapping values make sense anymore
+			mappingData.localContactIdentifierToServerId = [:]
+			mappingData.localContactIdentifierToHash = [:]
+
+			// save the mapping right away so that if something later fails we won't have a dangling group
+//			tutaContactFacade.saveMapping(self)
+			return newGroup
+		}
+	}
+}
+
