@@ -18,14 +18,6 @@ struct UserContactMapping: Codable {
 	var stableHash: Bool?
 }
 
-private let ALL_SUPPORTED_CONTACT_KEYS: [CNKeyDescriptor] =
-	[
-		CNContactIdentifierKey, CNContactGivenNameKey, CNContactFamilyNameKey, CNContactNicknameKey, CNContactOrganizationNameKey, CNContactBirthdayKey,
-		CNContactEmailAddressesKey, CNContactPhoneNumbersKey, CNContactPostalAddressesKey, CNContactDatesKey, CNContactDepartmentNameKey,
-		CNContactInstantMessageAddressesKey, CNContactMiddleNameKey, CNContactNameSuffixKey, CNContactPhoneticGivenNameKey, CNContactPhoneticMiddleNameKey,
-		CNContactPhoneticFamilyNameKey, CNContactRelationsKey, CNContactUrlAddressesKey, CNContactNamePrefixKey, CNContactJobTitleKey,
-	] as [CNKeyDescriptor]
-
 /// Handles synchronization between contacts in Tuta and contacts on the device.
 class IosMobileContactsFacade: MobileContactsFacade {
 	private let userDefaults: UserDefaults
@@ -62,13 +54,24 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		TUTSLog("Contact SAVE finished")
 	}
 
-	private func getAllContacts(_ username: String) async throws -> [StructuredContact] {
+	private func getDuplicateContacts(_ username: String) async throws -> [StructuredContact] {
 		let store = CNContactStore()
 		let containers = try store.containers(matching: nil)
 		guard let localContainer = containers.first(where: { $0.type == CNContainerType.local }) else {
 			throw TUTErrorFactory.createError("No local container present for contacts.")
 		}
-		let contacts = try await getContactsInContactBook(localContainer.identifier, username)
+		let fetch = makeContactFetchRequest()
+		fetch.sortOrder = CNContactSortOrder.givenName
+		let mapping = self.getMapping(username: username)!
+
+		var contacts = [StructuredContact]()
+		try self.enumerateContactsInContactStore(store, with: fetch) { (contact, _) in
+			let iOSId = contact.identifier
+			if mapping.localContactIdentifierToHash[iOSId] != nil {
+				let serverId = mapping.localContactIdentifierToServerId[iOSId]
+				contacts.append(contact.toStructuredContact(serverId: serverId))
+			}
+		}
 		return contacts
 	}
 
@@ -77,13 +80,33 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		try await acquireContactsPermission()
 		var mapping = try self.getOrCreateMapping(username: username)
 		let matchResult = try self.matchStoredContacts(against: contacts, forUser: &mapping)
-		let duplicateResult = try await self.matchStoredContacts(against: getAllContacts(username), forUser: &mapping)
+
 		TUTSLog(
 			"Contact SYNC result: createdOnDevice: \(matchResult.createdOnDevice.count) editedOnDevice: \(matchResult.editedOnDevice.count) deletedOnDevice: \(matchResult.deletedOnDevice.count) newServerContacts: \(matchResult.newServerContacts.count) deletedOnServer: \(matchResult.deletedOnServer.count) existingServerContacts: \(matchResult.existingServerContacts.count) nativeContactWithoutSourceId: \(matchResult.nativeContactWithoutSourceId.count)"
 		)
 		try self.insert(contacts: matchResult.newServerContacts, forUser: &mapping)
 		if !matchResult.deletedOnServer.isEmpty { try self.delete(contactsWithServerIDs: matchResult.deletedOnServer, forUser: &mapping) }
 		try self.update(contacts: matchResult.existingServerContacts, forUser: &mapping)
+
+		// Get any local contacts that are duplicates of contacts in our backend
+		let duplicateContacts = try await getDuplicateContacts(username)
+		let duplicateResult = try self.matchStoredContacts(against: duplicateContacts, forUser: &mapping)
+
+//		let existingContactIds = duplicateResult.existingServerContacts.map {
+//			_, contact in contact.id!
+//		}
+//		try self.delete(contactsWithServerIDs: existingContactIds, forUser: &mapping)
+
+		// Update the iOS IDs of contacts in the Tuta list to match the IDs in the local container
+//		let mergedContacts = duplicateResult.existingServerContacts.map { nativeContact, contact in
+//			let localId = nativeContact.localIdentifier
+//			let updatedNativeContact = {...nativeContact, localIdentifier: localId}
+//			return (updatedNativeContact, contact)
+//		}
+//		try self.update(contacts: mergedContacts, forUser: &mapping)
+
+		let (testContact, _) = duplicateResult.existingServerContacts.first!
+		testContact.contact.isUnifiedWithContact(withIdentifier: <#T##String#>)
 
 		// For sync it normally wouldn't happen that we have a contact without source/server id but for existing contacts without
 		// hashes we want to write the hashes on the first run so we reuse this field.
@@ -114,7 +137,7 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		// assert(containerId == CONTACT_BOOK_ID, "Invalid contact book: \(containerId)")
 		try await acquireContactsPermission()
 
-		let fetch = CNContactFetchRequest(keysToFetch: ALL_SUPPORTED_CONTACT_KEYS)
+		let fetch = makeContactFetchRequest()
 		fetch.sortOrder = CNContactSortOrder.givenName
 
 		let store = CNContactStore()
@@ -133,7 +156,7 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		let store = CNContactStore()
 		var mapping = try self.getOrCreateMapping(username: username)
 		let tutaGroup = try getTutaContactGroup(forUser: &mapping)
-		let fetch = CNContactFetchRequest(keysToFetch: ALL_SUPPORTED_CONTACT_KEYS)
+		let fetch = makeContactFetchRequest()
 		fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: tutaGroup.identifier)
 		var contacts = [CNContact]()
 		try self.enumerateContactsInContactStore(store, with: fetch) { (contact, _) in contacts.append(contact) }
@@ -176,63 +199,6 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		}
 	}
 
-	private func enumerateContactsInContactStore(
-		_ contactStore: CNContactStore,
-		with fetchRequest: CNContactFetchRequest,
-		usingBlock block: (CNContact, UnsafeMutablePointer<ObjCBool>) -> Void
-	) throws {
-		do { try contactStore.enumerateContacts(with: fetchRequest, usingBlock: block) } catch {
-			throw ContactStoreError(message: "Could not enumerate contacts", underlyingError: error)
-		}
-	}
-
-	/// Query the local container, ignoring the user's choices for the default contacts location.
-	/// This prevent other apps, as Gmail or even iCloud, from 'stealing' and moving our contacts to their lists.
-	private lazy var localContainer: String = {
-		let store = CNContactStore()
-		let defaultContainer = store.defaultContainerIdentifier()
-
-		do {
-			let containers = try store.containers(matching: nil)
-			TUTSLog("Contact containers: \(containers.map { "\($0.name) \($0.type) \($0.type.rawValue)" }.joined(separator: ","))")
-
-			// Apple allow just ONE local container, so we can query for the first and unique one
-			let localContainer = containers.first(where: { $0.type == CNContainerType.local })
-
-			return localContainer?.identifier ?? defaultContainer
-		} catch {
-			TUTSLog("Failed to get local container, using default")
-			return defaultContainer
-		}
-	}()
-
-	private func insert(contacts: [StructuredContact], forUser user: inout UserContactMapping) throws {
-		let store = CNContactStore()
-		let saveRequest = CNSaveRequest()
-		let contactGroup = try getTutaContactGroup(forUser: &user)
-
-		// We need store mapping from our contact id to native contact id but we get it only after actually saving the contacts,
-		// so until we execute the save request we keep track of the mapping
-		var insertedContacts = [(NativeMutableContact, StructuredContact)]()
-
-		for newContact in contacts {
-			if let contactId = newContact.id {
-				let nativeContact = NativeMutableContact(newContactWithServerId: contactId, container: localContainer)
-				nativeContact.updateContactWithData(newContact)
-				saveRequest.add(nativeContact.contact, toContainerWithIdentifier: localContainer)
-				saveRequest.addMember(nativeContact.contact, to: contactGroup)
-				insertedContacts.append((nativeContact, newContact))
-			}
-		}
-
-		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not insert contacts", underlyingError: error) }
-
-		for (nativeContact, structuredContact) in insertedContacts {
-			user.localContactIdentifierToServerId[nativeContact.contact.identifier] = structuredContact.id
-			user.localContactIdentifierToHash[nativeContact.contact.identifier] = structuredContact.stableHash()
-		}
-	}
-
 	private func update(contacts: [(NativeMutableContact, StructuredContact)], forUser user: inout UserContactMapping) throws {
 		let store = CNContactStore()
 		let saveRequest = CNSaveRequest()
@@ -250,7 +216,7 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		// we now need to create a request to remove all contacts from the user that match an id in idsToRemove
 		// it is OK if we are missing some contacts, as they are likely already deleted
 		let store = CNContactStore()
-		let fetch = CNContactFetchRequest(keysToFetch: [CNContactIdentifierKey] as [CNKeyDescriptor])
+		let fetch = makeContactFetchRequest(forKeys: [CNContactIdentifierKey] as [CNKeyDescriptor])
 
 		var serverIdToLocalIdentifier = [String: String]()
 		// doing it manually in case we have duplicates (which isn't good but migth happen)
@@ -272,27 +238,13 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		try store.execute(save)
 	}
 
-	private func deleteAllContacts(forGroup group: CNGroup) throws {
-
-		// we now need to create a request to remove all contacts from the user that match an id in idsToRemove
-		// it is OK if we are missing some contacts, as they are likely already deleted
-		let store = CNContactStore()
-		let fetch = CNContactFetchRequest(keysToFetch: [CNContactIdentifierKey] as [CNKeyDescriptor])
-
-		fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier)
-		let save = CNSaveRequest()
-
-		try self.enumerateContactsInContactStore(store, with: fetch) { contact, _ in save.delete(contact.mutableCopy() as! CNMutableContact) }
-
-		try store.execute(save)
-	}
 
 	private func matchStoredContacts(against contacts: [StructuredContact], forUser user: inout UserContactMapping) throws -> MatchContactResult {
 		// prepare the result
 		var queryResult = MatchContactResult()
 
 		let store = CNContactStore()
-		let fetch = CNContactFetchRequest(keysToFetch: ALL_SUPPORTED_CONTACT_KEYS)
+		let fetch = makeContactFetchRequest()
 		let group = try self.getTutaContactGroup(forUser: &user)
 
 		fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier)
@@ -344,101 +296,13 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		return queryResult
 	}
 
-	/// Gets the Tuta contact group, creating it if it does not exist.
-	private func getTutaContactGroup(forUser mapping: inout UserContactMapping) throws -> CNGroup {
-		let store = CNContactStore()
-
-		let result = try store.groups(matching: CNGroup.predicateForGroups(withIdentifiers: [mapping.systemGroupIdentifier]))
-		if !result.isEmpty {
-			return result[0]
-		} else {
-			TUTSLog("can't get tuta contact group \(mapping.username) from native: likely deleted by user")
-
-			let newGroup = try self.createCNGroup(username: mapping.username)
-
-			// update mapping right away so that everyone down the road will be using an updated version
-			mapping.systemGroupIdentifier = newGroup.identifier
-			// if the group is not there none of the mapping values make sense anymore
-			mapping.localContactIdentifierToServerId = [:]
-			mapping.localContactIdentifierToHash = [:]
-
-			// save the mapping right away so that if something later fails we won;t have a dangling group
-			self.saveMapping(mapping, forUsername: mapping.username)
-			return newGroup
-		}
-	}
-
-	private func getOrCreateMapping(username: String) throws -> UserContactMapping {
-		if let mapping = self.getMapping(username: username) {
-			return mapping
-		} else {
-			TUTSLog("MobileContactsFacade: creating new mapping for \(username)")
-			let newGroup = try self.createCNGroup(username: username)
-			let mapping = UserContactMapping(
-				username: username,
-				systemGroupIdentifier: newGroup.identifier,
-				localContactIdentifierToServerId: [:],
-				localContactIdentifierToHash: [:],
-				stableHash: true
-			)
-
-			self.saveMapping(mapping, forUsername: username)
-			return mapping
-		}
-	}
-
-	private func getMappingsDictionary() -> [String: [String: Any]] {
-		self.userDefaults.dictionary(forKey: CONTACTS_MAPPINGS) as! [String: [String: Any]]? ?? [:]
-
-	}
-
-	private func getMapping(username: String) -> UserContactMapping? {
-		if var dict = getMappingsDictionary()[username] {
-			// migration from the version that didn't have hashes
-			if dict["localContactIdentifierToHash"] == nil { dict["localContactIdentifierToHash"] = [String: UInt32]() }
-			if dict["stableHash"] == nil {
-				TUTSLog("Migrating old unstable hashes")
-				// Map old values Int64 to a truncated UInt32 hash
-				dict["localContactIdentifierToHash"] = (dict["localContactIdentifierToHash"] as! [String: Int]).mapValues { UInt32($0 & 0xFFFFFFFF) }
-				dict["stablehash"] = true
-			}
-			return try! DictionaryDecoder().decode(UserContactMapping.self, from: dict)
-		} else {
-			return nil
-		}
-	}
-
-	private func createCNGroup(username: String) throws -> CNMutableGroup {
-		let newGroup = CNMutableGroup()
-		newGroup.name = "Tuta \(username)"
-
-		let saveRequest = CNSaveRequest()
-		saveRequest.add(newGroup, toContainerWithIdentifier: localContainer)
-
-		do { try CNContactStore().execute(saveRequest) } catch { throw ContactStoreError(message: "Could not create CNGroup", underlyingError: error) }
-
-		return newGroup
-	}
-
-	private func saveMapping(_ mapping: UserContactMapping, forUsername username: String) {
-		var dict = getMappingsDictionary()
-		dict[username] = try! DictionaryEncoder().encode(mapping)
-		self.userDefaults.setValue(dict, forKey: CONTACTS_MAPPINGS)
-	}
-
-	private func deleteMapping(forUsername username: String) {
-		var dict = getMappingsDictionary()
-		dict.removeValue(forKey: username)
-		self.userDefaults.setValue(dict, forKey: CONTACTS_MAPPINGS)
-	}
-
 	private func queryContactSuggestions(query: String, upTo: Int) throws -> [ContactSuggestion] {
 		let contactsStore = CNContactStore()
 		let keysToFetch: [CNKeyDescriptor] = [
 			CNContactEmailAddressesKey as NSString,  // only NSString is CNKeyDescriptor
 			CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
 		]
-		let request = CNContactFetchRequest(keysToFetch: keysToFetch)
+		let request = makeContactFetchRequest(forKeys: keysToFetch)
 		var result = [ContactSuggestion]()
 		// This method is synchronous. Enumeration prevents having all accounts in memory at once.
 		// We are doing the search manually because we can cannot combine predicates.
@@ -455,286 +319,6 @@ class IosMobileContactsFacade: MobileContactsFacade {
 			}
 		}
 		return result
-	}
-}
-
-/// Defines a mutable contact and functionality for commiting the contact into a contact store
-private class NativeMutableContact {
-	var contact: CNMutableContact
-	let serverId: String
-	let isNewContact: Bool
-	let originalHashValue: Int?
-	let localContainer: String
-
-	var localIdentifier: String { get { contact.identifier } }
-
-	init(existingContact: CNContact, serverId: String, container: String) {
-		self.contact = existingContact.mutableCopy() as! CNMutableContact
-		self.serverId = serverId
-		self.isNewContact = false
-		self.originalHashValue = existingContact.hash
-		self.localContainer = container
-	}
-
-	init(newContactWithServerId serverId: String, container: String) {
-		self.contact = CNMutableContact()
-		self.serverId = serverId
-		self.isNewContact = true
-		self.originalHashValue = nil
-		self.localContainer = container
-	}
-
-	func updateContactWithData(_ data: StructuredContact) {
-		var customDates = [CNLabeledValue<NSDateComponents>]()
-		for date in data.customDate {
-			guard let parsed = date.toLabeledValue() else { continue }
-			customDates.append(parsed)
-		}
-
-		self.contact.givenName = data.firstName
-		self.contact.familyName = data.lastName
-		self.contact.nickname = data.nickname
-		self.contact.organizationName = data.company
-		self.contact.emailAddresses = data.mailAddresses.map { address in address.toLabeledValue() }
-		self.contact.phoneNumbers = data.phoneNumbers.map { number in number.toLabeledValue() }
-		self.contact.postalAddresses = data.addresses.map { address in address.toLabeledValue() }
-		self.contact.dates = customDates
-		self.contact.departmentName = data.department ?? ""
-		self.contact.instantMessageAddresses = data.messengerHandles.map { $0.toLabeledValue() }
-		self.contact.middleName = data.middleName ?? ""
-		self.contact.nameSuffix = data.nameSuffix ?? ""
-		self.contact.phoneticGivenName = data.phoneticFirst ?? ""
-		self.contact.phoneticFamilyName = data.phoneticLast ?? ""
-		self.contact.phoneticMiddleName = data.phoneticMiddle ?? ""
-		self.contact.contactRelations = data.relationships.map { $0.toLabeledValue() }
-		self.contact.urlAddresses = data.websites.map { $0.toLabeledValue() }
-		// self.contact.note = data.notes  // TODO: get the entitlement for this
-		self.contact.namePrefix = data.title
-		self.contact.jobTitle = data.role
-
-		if let birthday = data.birthday { self.contact.birthday = DateComponents.fromIso(birthday) } else { self.contact.birthday = nil }
-	}
-}
-
-private extension StructuredMailAddress {
-	func toLabeledValue() -> CNLabeledValue<NSString> {
-		let label =
-			switch self.type {
-			case ._private: CNLabelHome
-			case .work: CNLabelWork
-			case .custom: self.customTypeName
-			default: CNLabelOther
-			}
-		return CNLabeledValue(label: label, value: self.address as NSString)
-	}
-}
-
-private extension StructuredPhoneNumber {
-	func toLabeledValue() -> CNLabeledValue<CNPhoneNumber> {
-		let label =
-			switch self.type {
-			case ._private: CNLabelHome
-			case .work: CNLabelWork
-			case .mobile: CNLabelPhoneNumberMobile
-			case .fax: CNLabelPhoneNumberOtherFax
-			case .custom: self.customTypeName
-			case .other: CNLabelOther
-			}
-		let number = CNPhoneNumber(stringValue: self.number)
-		return CNLabeledValue(label: label, value: number)
-	}
-}
-
-private extension CNLabeledValue<CNContactRelation> {
-	func toStructuredRelationship() -> StructuredRelationship {
-		let (type, label): (ContactRelationshipType, String?) =
-			switch self.label {
-			case CNLabelContactRelationParent: (.parent, nil)
-			case CNLabelContactRelationBrother: (.brother, nil)
-			case CNLabelContactRelationSister: (.sister, nil)
-			case CNLabelContactRelationChild: (.child, nil)
-			case CNLabelContactRelationFriend: (.friend, nil)
-			case CNLabelContactRelationSpouse: (.spouse, nil)
-			case CNLabelContactRelationPartner: (.partner, nil)
-			case CNLabelContactRelationAssistant: (.assistant, nil)
-			case CNLabelContactRelationManager: (.manager, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredRelationship(person: value.name, type: type, customTypeName: label ?? "")
-	}
-}
-
-private extension StructuredRelationship {
-	func toLabeledValue() -> CNLabeledValue<CNContactRelation> {
-		let label =
-			switch self.type {
-			case .parent: CNLabelContactRelationParent
-			case .brother: CNLabelContactRelationBrother
-			case .sister: CNLabelContactRelationSister
-			case .child: CNLabelContactRelationChild
-			case .friend: CNLabelContactRelationFriend
-			case .spouse: CNLabelContactRelationSpouse
-			case .partner: CNLabelContactRelationPartner
-			case .assistant: CNLabelContactRelationAssistant
-			case .manager: CNLabelContactRelationManager
-			case .other: CNLabelOther
-			case .custom: self.customTypeName
-			case .relative: CNLabelOther
-			}
-
-		return CNLabeledValue(label: label, value: CNContactRelation(name: person))
-	}
-}
-
-private enum StructuredMessengerHandleTypeName: String {
-	case signal = "Signal"
-	case whatsapp = "WhatsApp"
-	case telegram = "Telegram"
-	case discord = "Discord"
-}
-
-private extension CNLabeledValue<CNInstantMessageAddress> {
-	func toStructuredMessengerHandle() -> StructuredMessengerHandle {
-		let (type, label): (ContactMessengerHandleType, String?) =
-			switch self.value.service {
-			case StructuredMessengerHandleTypeName.signal.rawValue: (.signal, nil)
-			case StructuredMessengerHandleTypeName.whatsapp.rawValue: (.whatsapp, nil)
-			case StructuredMessengerHandleTypeName.telegram.rawValue: (.telegram, nil)
-			case StructuredMessengerHandleTypeName.discord.rawValue: (.discord, nil)
-			default: (.custom, Self.localizedString(forLabel: self.value.service))
-			}
-		return StructuredMessengerHandle(handle: value.username, type: type, customTypeName: label ?? "")
-	}
-}
-
-private extension StructuredMessengerHandle {
-	func toLabeledValue() -> CNLabeledValue<CNInstantMessageAddress> {
-		let label =
-			switch self.type {
-			case .signal: StructuredMessengerHandleTypeName.signal.rawValue
-			case .whatsapp: StructuredMessengerHandleTypeName.whatsapp.rawValue
-			case .telegram: StructuredMessengerHandleTypeName.telegram.rawValue
-			case .discord: StructuredMessengerHandleTypeName.discord.rawValue
-			case .custom: self.customTypeName
-			case .other: CNLabelOther
-			}
-		return CNLabeledValue(label: CNLabelOther, value: CNInstantMessageAddress(username: handle, service: label))
-	}
-}
-
-private extension CNLabeledValue<NSDateComponents> {
-	func toStructuredCustomDate() -> StructuredCustomDate {
-		let (type, label): (ContactCustomDateType, String?) =
-			switch self.label {
-			case CNLabelDateAnniversary: (.anniversary, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredCustomDate(dateIso: value.toIso(), type: type, customTypeName: label ?? "")
-	}
-}
-
-private extension StructuredCustomDate {
-	func toLabeledValue() -> CNLabeledValue<NSDateComponents>? {
-		guard let date = NSDateComponents.fromIso(self.dateIso) else { return nil }
-		let label =
-			switch self.type {
-			case .anniversary: CNLabelDateAnniversary
-			case .other: CNLabelOther
-			case .custom: self.customTypeName
-			}
-		return CNLabeledValue(label: label, value: date)
-	}
-}
-
-private extension CNLabeledValue<CNPhoneNumber> {
-	func toStructuredPhoneNumber() -> StructuredPhoneNumber {
-		let (type, label): (ContactPhoneNumberType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelPhoneNumberMobile: (.mobile, nil)
-			case CNLabelPhoneNumberOtherFax: (.fax, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredPhoneNumber(number: self.value.stringValue, type: type, customTypeName: label ?? "")
-	}
-}
-
-private extension CNLabeledValue<NSString> {
-	func toStructuredMailAddress() -> StructuredMailAddress {
-		let (type, label): (ContactAddressType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredMailAddress(address: self.value as String, type: type, customTypeName: label ?? "")
-	}
-	func toStructuredWebsite() -> StructuredWebsite {
-		let (type, label): (ContactWebsiteType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredWebsite(url: self.value as String, type: type, customTypeName: label ?? "")
-	}
-}
-
-private extension StructuredAddress {
-	func toLabeledValue() -> CNLabeledValue<CNPostalAddress> {
-		let label =
-			switch self.type {
-			case ._private: CNLabelHome
-			case .work: CNLabelWork
-			case .custom: self.customTypeName
-			case .other: CNLabelOther
-			}
-		let address = CNMutablePostalAddress()
-		// Contacts framework operates on structured addresses but that's not how we store them on the server
-		// and that's not how it works in many parts of the world either.
-		address.street = self.address
-		return CNLabeledValue(label: label, value: address)
-	}
-}
-
-private extension StructuredWebsite {
-	func toLabeledValue() -> CNLabeledValue<NSString> {
-		let label =
-			switch self.type {
-			case ._private: CNLabelHome
-			case .work: CNLabelWork
-			case .custom: self.customTypeName
-			case .other: CNLabelOther
-			}
-		return CNLabeledValue(label: label, value: url as NSString)
-	}
-}
-
-private extension CNLabeledValue<CNPostalAddress> {
-	func toStructuredAddress() -> StructuredAddress {
-		let (type, label): (ContactAddressType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		let address = CNPostalAddressFormatter().string(from: self.value)
-		return StructuredAddress(address: address, type: type, customTypeName: label ?? "")
-	}
-}
-
-private extension Hashable {
-	func computeHash() -> Int {
-		var hasher = Hasher()
-		hasher.combine(self)
-		return hasher.finalize()
 	}
 }
 
@@ -788,38 +372,3 @@ private extension NSDateComponents {
 	}
 }
 
-private extension CNContact {
-	func toStructuredContact(serverId: String?) -> StructuredContact {
-		StructuredContact(
-			id: serverId,
-			firstName: givenName,
-			lastName: familyName,
-			nickname: nickname,
-			company: organizationName,
-			birthday: birthday?.toIso(),
-			mailAddresses: emailAddresses.map { $0.toStructuredMailAddress() },
-			phoneNumbers: phoneNumbers.map { $0.toStructuredPhoneNumber() },
-			addresses: postalAddresses.map { $0.toStructuredAddress() },
-			rawId: identifier,
-			customDate: dates.map { $0.toStructuredCustomDate() },
-			department: departmentName,
-			messengerHandles: instantMessageAddresses.map { $0.toStructuredMessengerHandle() },
-			middleName: middleName,
-			nameSuffix: nameSuffix,
-			phoneticFirst: phoneticGivenName,
-			phoneticLast: phoneticFamilyName,
-			phoneticMiddle: phoneticMiddleName,
-			relationships: contactRelations.map { $0.toStructuredRelationship() },
-			websites: urlAddresses.map { $0.toStructuredWebsite() },
-			notes: "",  // TODO: add when contact notes entitlement is obtained
-			title: namePrefix,
-			role: jobTitle
-		)
-	}
-}
-
-/// Calls CNLabeledValue.localizedString, but accepts null values (if so, it returns nil)
-private func localizeContactLabel<ValueType>(_ what: CNLabeledValue<ValueType>) -> String? {
-	guard let label = what.label else { return nil }
-	return type(of: what).localizedString(forLabel: label)
-}
