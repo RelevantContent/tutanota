@@ -1,3 +1,4 @@
+use std::borrow::ToOwned;
 use crate::entity_client::IdType;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -23,6 +24,11 @@ impl GeneratedId {
 		use crate::util::test_utils::generate_random_string;
 		// not the actual alphabet we use in real generated IDs, but we aren't dealing with parsing generated IDs yet, so it's fine
 		Self(generate_random_string::<9>())
+	}
+
+	pub fn min_id() -> Self {
+		// ideally should return a ref to a static id
+		GeneratedId("------------".to_owned())
 	}
 }
 

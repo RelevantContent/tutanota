@@ -96,13 +96,13 @@ impl EntityClient {
 		direction: ListLoadDirection,
 	) -> Result<Vec<ParsedEntity>, ApiCallError> {
 		let type_model = self.get_type_model(type_ref)?;
-		assert_eq!(type_model.element_type, ElementType::ListElement);
+		assert_eq!(type_model.element_type, ElementType::ListElement, "cannot load range for non-list element");
 		// FIXME: validate parameters
 		let reverse = direction == ListLoadDirection::DESC;
 		// TODO: this is not the best way to build URL, we assume that everything is URL safe
 		// TODO: custom ids? are they fine?
 		let url = format!(
-			"{}/rest/{}/{}/{}?start_id={start_id}&count={count}&reverse={reverse}",
+			"{}/rest/{}/{}/{}?start={start_id}&count={count}&reverse={reverse}",
 			self.base_url, type_ref.app, type_ref.type_, list_id
 		);
 		let response_bytes = self
