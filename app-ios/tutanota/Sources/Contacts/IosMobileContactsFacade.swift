@@ -63,8 +63,8 @@ class IosMobileContactsFacade: MobileContactsFacade {
 		try contactList.update(contacts: matchResult.existingServerContacts)
 
 		// Get any local contacts that are duplicates of contacts in our backend
-//		let duplicateContacts = try await self.contactFacade.getDuplicateContacts(username)
-//		let duplicateResult = try self.matchStoredContacts(against: duplicateContacts, forUser: contactList)
+		//		let duplicateContacts = try await self.contactFacade.getDuplicateContacts(username)
+		//		let duplicateResult = try self.matchStoredContacts(against: duplicateContacts, forUser: contactList)
 
 		//		let existingContactIds = duplicateResult.existingServerContacts.map {
 		//			_, contact in contact.id!

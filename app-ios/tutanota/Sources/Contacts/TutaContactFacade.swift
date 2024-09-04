@@ -1,17 +1,10 @@
-//
-//  TutaContactFacade.swift
-//  tutanota
-//
-//  Created by Tutao GmbH on 03.09.24.
-//
-
 import Contacts
 import DictionaryCoding
 import Foundation
 
 private let CONTACTS_MAPPINGS = "ContactsMappings"
 
-/// Manages the available `UserContactMapping`s
+/// Manages the available `UserContactMapping`s and provides functionality to handle non-Tuta contacts
 class TutaContactFacade {
 	private let nativeContactStoreFacade: NativeContactStoreFacade
 	private let userDefaults: UserDefaults
@@ -21,12 +14,14 @@ class TutaContactFacade {
 		self.userDefaults = userDefault
 	}
 
+	/// Returns the local container from the `NativeContactStoreFacade`
 	func getLocalContainer() -> String { nativeContactStoreFacade.getLocalContainer() }
 
 	private func getMappingsDictionary() -> [String: [String: Any]] {
 		self.userDefaults.dictionary(forKey: CONTACTS_MAPPINGS) as! [String: [String: Any]]? ?? [:]
 	}
 
+	/// Returns a contact list from the mappings dictionary and migrates it if necessary
 	func getContactList(username: String) -> UserContactList? {
 		if var dict = getMappingsDictionary()[username] {
 			// migration from the version that didn't have hashes
@@ -44,6 +39,7 @@ class TutaContactFacade {
 		}
 	}
 
+	/// Inserts a contact list into the mappings dictionary
 	func saveContactList(_ contactList: UserContactList) {
 		var dict = getMappingsDictionary()
 		let mapping = contactList.getMapping()
@@ -51,6 +47,7 @@ class TutaContactFacade {
 		self.userDefaults.setValue(dict, forKey: CONTACTS_MAPPINGS)
 	}
 
+	/// Removes a contact list from the mappings dictionary and deletes the associated group from the contact store
 	func deleteContactList(_ contactList: UserContactList) throws {
 		let group = try contactList.getTutaContactGroup()
 		var dict = getMappingsDictionary()
@@ -71,20 +68,17 @@ class TutaContactFacade {
 		}
 	}
 
+	/// Returns all contacts in the iOS contact store
 	func getAllContacts(withSorting desiredSorting: CNContactSortOrder?) throws -> [StructuredContact] {
 		try nativeContactStoreFacade.getAllContacts(inGroup: nil, withSorting: desiredSorting)
 			.map { nativeContact in nativeContact.toStructuredContact(serverId: nil) }
-	}
-
-	/// Gets contacts from the devices which are not a part of a Tuta contact list
-	func getUnhandledContacts() {
-
 	}
 
 	func queryContactSuggestions(query: String, upTo: Int) throws -> [ContactSuggestion] {
 		try nativeContactStoreFacade.queryContactSuggestions(query: query, upTo: upTo)
 	}
 
+	/// Returns any contacts outside the Tuta contact list specified by `username` that match contacts inside that Tuta contact list
 	func getDuplicateContacts(_ username: String) async throws -> [StructuredContact] {
 		let contactList = self.getContactList(username: username)!
 		let mapping = contactList.getMapping()
@@ -101,69 +95,7 @@ class TutaContactFacade {
 		return contacts
 	}
 
+	/// Returns whether the local contact container is available
 	func isLocalStorageAvailable() -> Bool { nativeContactStoreFacade.isLocalStorageAvailable() }
 
-}
-
-extension CNContact {
-	func toStructuredContact(serverId: String?) -> StructuredContact {
-		StructuredContact(
-			id: serverId,
-			firstName: givenName,
-			lastName: familyName,
-			nickname: nickname,
-			company: organizationName,
-			birthday: birthday?.toIso(),
-			mailAddresses: emailAddresses.map { $0.toStructuredMailAddress() },
-			phoneNumbers: phoneNumbers.map { $0.toStructuredPhoneNumber() },
-			addresses: postalAddresses.map { $0.toStructuredAddress() },
-			rawId: identifier,
-			customDate: dates.map { $0.toStructuredCustomDate() },
-			department: departmentName,
-			messengerHandles: instantMessageAddresses.map { $0.toStructuredMessengerHandle() },
-			middleName: middleName,
-			nameSuffix: nameSuffix,
-			phoneticFirst: phoneticGivenName,
-			phoneticLast: phoneticFamilyName,
-			phoneticMiddle: phoneticMiddleName,
-			relationships: contactRelations.map { $0.toStructuredRelationship() },
-			websites: urlAddresses.map { $0.toStructuredWebsite() },
-			notes: "",  // TODO: add when contact notes entitlement is obtained
-			title: namePrefix,
-			role: jobTitle
-		)
-	}
-}
-
-extension DateComponents {
-	func toIso() -> String? {
-		if let year, let month, let day {
-			String(format: "%04d-%02d-%02d", year, month, day)
-		} else if let month, let day {
-			String(format: "--%02d-%02d", month, day)
-		} else {
-			nil
-		}
-	}
-	static func fromIso(_ iso: String) -> DateComponents? {
-		guard let date = Date.fromIso(iso) else { return nil }
-		return Calendar(identifier: Calendar.Identifier.gregorian).dateComponents([.year, .day, .month], from: date)
-	}
-}
-
-extension Date {
-	static func fromIso(_ iso: String) -> Date? {
-		let formatter = ISO8601DateFormatter()
-		formatter.formatOptions = [.withFullDate]
-
-		return formatter.date(from: iso)
-	}
-}
-
-extension NSDateComponents {
-	func toIso() -> String { String(format: "%04d-%02d-%02d", year, month, day) }
-	static func fromIso(_ iso: String) -> NSDateComponents? {
-		guard let date = DateComponents.fromIso(iso) else { return nil }
-		return date as NSDateComponents
-	}
 }

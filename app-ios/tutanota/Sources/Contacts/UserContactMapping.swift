@@ -1,10 +1,3 @@
-//
-//  UserContactMapping.swift
-//  tutanota
-//
-//  Created by Tutao GmbH on 03.09.24.
-//
-
 import Contacts
 import Foundation
 
@@ -24,8 +17,10 @@ class UserContactList {
 
 	init(nativeContactStoreFacade: NativeContactStoreFacade, username: String, mappingData: UserContactMapping?, stableHash: Bool? = nil) throws {
 		self.nativeContactStoreFacade = nativeContactStoreFacade
-		if let unwrappedMappingData = mappingData {
-			self.mappingData = unwrappedMappingData
+		// If mapping data is provided, we are likely reinstantiating an existing contact list
+		// so there is no need for a new group
+		if let mappingData {
+			self.mappingData = mappingData
 		} else {
 			let group = try nativeContactStoreFacade.createCNGroup(username: username)
 			self.mappingData = UserContactMapping(
@@ -38,10 +33,13 @@ class UserContactList {
 		}
 	}
 
+	/// Returns the mapping between the iOS contact IDs and the Tuta server IDs
 	func getMapping() -> UserContactMapping { mappingData }
 
+	/// Returns all of the contacts inside the contact list
 	func getAllContacts() throws -> [CNContact] { try nativeContactStoreFacade.getAllContacts(inGroup: getTutaContactGroup(), withSorting: nil) }
 
+	/// Appends a one or more contacts to the contact list provided that the contacts have Tuta server IDs
 	func insert(contacts: [StructuredContact]) throws {
 		let contactGroup = try self.getTutaContactGroup()
 
@@ -62,6 +60,7 @@ class UserContactList {
 		try nativeContactStoreFacade.insert(contacts: insertedContacts.map { $0.0 }, toGroup: contactGroup)
 	}
 
+	/// Modifies the data of an existing contact in the contact list
 	func update(contacts: [(NativeMutableContact, StructuredContact)]) throws {
 		var mutableContacts = [NativeMutableContact]()
 		for (nativeMutableContact, serverContact) in contacts {
@@ -72,18 +71,21 @@ class UserContactList {
 		try nativeContactStoreFacade.update(contacts: mutableContacts)
 	}
 
+	/// Removes one or more contacts in the contact list
 	func delete(contactsWithServerIDs serverIdsToDelete: [String]) throws {
 		// we now need to create a request to remove all contacts from the user that match an id in idsToRemove
 		// it is OK if we are missing some contacts, as they are likely already deleted
-
 		var serverIdToLocalIdentifier = [String: String]()
 		// doing it manually in case we have duplicates (which isn't good but might happen)
 		for (localIdentifier, serverId) in mappingData.localContactIdentifierToServerId { serverIdToLocalIdentifier[serverId] = localIdentifier }
 
 		let localAndServerIds = serverIdsToDelete.map { (serverId: $0, localIdentifier: serverIdToLocalIdentifier[$0]) }
+
+		// Delete the contacts from the iOS contact store
 		let nativeIdentifiersToRemove = localAndServerIds.compactMap { $0.localIdentifier }
 		try nativeContactStoreFacade.delete(localContacts: nativeIdentifiersToRemove)
 
+		// Erasing the mapping between the local iOS IDs and the Tuta server IDs
 		for (localIdentifier, _) in localAndServerIds {
 			mappingData.localContactIdentifierToServerId.removeValue(forKey: localIdentifier)
 			mappingData.localContactIdentifierToHash.removeValue(forKey: localIdentifier)

@@ -1,10 +1,3 @@
-//
-//  NativeContactFacade.swift
-//  tutanota
-//
-//  Created by Tutao GmbH on 03.09.24.
-//
-
 import Contacts
 import Foundation
 
@@ -41,6 +34,7 @@ class NativeContactStoreFacade {
 
 	func getLocalContainer() -> String { localContainer }
 
+	/// Returns whether the local contact container is available
 	func isLocalStorageAvailable() -> Bool {
 		let store = CNContactStore()
 
@@ -56,6 +50,7 @@ class NativeContactStoreFacade {
 		}
 	}
 
+	/// Creates a contact group named for the Tuta app
 	func createCNGroup(username: String) throws -> CNMutableGroup {
 		let newGroup = CNMutableGroup()
 		newGroup.name = "Tuta \(username)"
@@ -68,12 +63,14 @@ class NativeContactStoreFacade {
 		return newGroup
 	}
 
+	/// Returns the contact group with the matching identifier from the iOS contacts
 	func loadCNGroup(withIdentifier: String) throws -> CNGroup? {
 		let store = CNContactStore()
 		let groups = try store.groups(matching: CNGroup.predicateForGroups(withIdentifiers: [withIdentifier]))
 		return groups.first
 	}
 
+	/// Empties then deletes a contact group from iOS
 	func deleteCNGroup(forGroup group: CNGroup) throws {
 		// we now need to create a request to remove all contacts from the user that match an id in idsToRemove
 		// it is OK if we are missing some contacts, as they are likely already deleted
@@ -93,11 +90,12 @@ class NativeContactStoreFacade {
 		try store.execute(saveRequest)
 	}
 
-	func getAllContacts(inGroup targetGroup: CNGroup?, withSorting desiredSorting: CNContactSortOrder?) throws -> [CNContact] {
+	/// Returns all contacts that match a specified query
+	func getAllContacts(inGroup group: CNGroup?, withSorting sorting: CNContactSortOrder?) throws -> [CNContact] {
 		let store = CNContactStore()
 		let fetch = makeContactFetchRequest()
-		if let group = targetGroup { fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier) }
-		if let sorting = desiredSorting { fetch.sortOrder = sorting }
+		if let group { fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier) }
+		if let sorting { fetch.sortOrder = sorting }
 
 		var contacts = [CNContact]()
 		try self.enumerateContactsInContactStore(store, with: fetch) { contact, _ in contacts.append(contact) }
@@ -105,6 +103,7 @@ class NativeContactStoreFacade {
 		return contacts
 	}
 
+	/// Returns the full names and email addresses of any contacts that match the name `query` (case insensitive)
 	func queryContactSuggestions(query: String, upTo: Int) throws -> [ContactSuggestion] {
 		let contactsStore = CNContactStore()
 		let keysToFetch: [CNKeyDescriptor] = [
@@ -130,6 +129,7 @@ class NativeContactStoreFacade {
 		return result
 	}
 
+	/// Appends one or more contacts to a contact group
 	func insert(contacts: [NativeMutableContact], toGroup group: CNGroup) throws {
 		let store = CNContactStore()
 		let saveRequest = CNSaveRequest()
@@ -142,6 +142,7 @@ class NativeContactStoreFacade {
 		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not insert contacts", underlyingError: error) }
 	}
 
+	/// Modifies the data of one or more existing contacts
 	func update(contacts: [NativeMutableContact]) throws {
 		let store = CNContactStore()
 		let saveRequest = CNSaveRequest()
@@ -151,6 +152,7 @@ class NativeContactStoreFacade {
 		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not update contacts", underlyingError: error) }
 	}
 
+	/// Remove one or more contacts from the contact store via their local iOS contact IDs
 	func delete(localContacts nativeIdentifiersToRemove: [String]) throws {
 		let store = CNContactStore()
 		let fetch = makeContactFetchRequest(forKeys: [CNContactIdentifierKey] as [CNKeyDescriptor])
@@ -163,7 +165,8 @@ class NativeContactStoreFacade {
 		try store.execute(save)
 	}
 
-	func enumerateContactsInContactStore(
+	/// A wrapper around `CNContactStore.enumerateContacts()` that rethrows any errors as `ContactStoreError`s
+	private func enumerateContactsInContactStore(
 		_ contactStore: CNContactStore,
 		with fetchRequest: CNContactFetchRequest,
 		usingBlock block: (CNContact, UnsafeMutablePointer<ObjCBool>) -> Void
@@ -174,12 +177,12 @@ class NativeContactStoreFacade {
 	}
 
 	/// Create a fetch request that also loads data for a set of keys on each contact, ensuring that only real, non-unified contacts are pulled from the contact store.
-	func makeContactFetchRequest(forKeys keysToFetch: [CNKeyDescriptor]) -> CNContactFetchRequest {
+	private func makeContactFetchRequest(forKeys keysToFetch: [CNKeyDescriptor]) -> CNContactFetchRequest {
 		let fetchRequest = CNContactFetchRequest(keysToFetch: keysToFetch)
 		fetchRequest.unifyResults = false
 		return fetchRequest
 	}
 
 	/// Create a fetch request that gets all supported keys, ensuring only real, non-unified contacts are pulled from the contact store.
-	func makeContactFetchRequest() -> CNContactFetchRequest { makeContactFetchRequest(forKeys: ALL_SUPPORTED_CONTACT_KEYS) }
+	private func makeContactFetchRequest() -> CNContactFetchRequest { makeContactFetchRequest(forKeys: ALL_SUPPORTED_CONTACT_KEYS) }
 }

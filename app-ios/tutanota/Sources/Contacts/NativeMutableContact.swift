@@ -1,10 +1,3 @@
-//
-//  NativeMutableContact.swift
-//  tutanota
-//
-//  Created by Tutao GmbH on 03.09.24.
-//
-
 import Contacts
 import Foundation
 
@@ -66,7 +59,7 @@ class NativeMutableContact {
 	}
 }
 
-extension StructuredMailAddress {
+private extension StructuredMailAddress {
 	func toLabeledValue() -> CNLabeledValue<NSString> {
 		let label =
 			switch self.type {
@@ -79,7 +72,7 @@ extension StructuredMailAddress {
 	}
 }
 
-extension StructuredPhoneNumber {
+private extension StructuredPhoneNumber {
 	func toLabeledValue() -> CNLabeledValue<CNPhoneNumber> {
 		let label =
 			switch self.type {
@@ -95,27 +88,7 @@ extension StructuredPhoneNumber {
 	}
 }
 
-extension CNLabeledValue<CNContactRelation> {
-	func toStructuredRelationship() -> StructuredRelationship {
-		let (type, label): (ContactRelationshipType, String?) =
-			switch self.label {
-			case CNLabelContactRelationParent: (.parent, nil)
-			case CNLabelContactRelationBrother: (.brother, nil)
-			case CNLabelContactRelationSister: (.sister, nil)
-			case CNLabelContactRelationChild: (.child, nil)
-			case CNLabelContactRelationFriend: (.friend, nil)
-			case CNLabelContactRelationSpouse: (.spouse, nil)
-			case CNLabelContactRelationPartner: (.partner, nil)
-			case CNLabelContactRelationAssistant: (.assistant, nil)
-			case CNLabelContactRelationManager: (.manager, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredRelationship(person: value.name, type: type, customTypeName: label ?? "")
-	}
-}
-
-extension StructuredRelationship {
+private extension StructuredRelationship {
 	func toLabeledValue() -> CNLabeledValue<CNContactRelation> {
 		let label =
 			switch self.type {
@@ -137,28 +110,7 @@ extension StructuredRelationship {
 	}
 }
 
-private enum StructuredMessengerHandleTypeName: String {
-	case signal = "Signal"
-	case whatsapp = "WhatsApp"
-	case telegram = "Telegram"
-	case discord = "Discord"
-}
-
-extension CNLabeledValue<CNInstantMessageAddress> {
-	func toStructuredMessengerHandle() -> StructuredMessengerHandle {
-		let (type, label): (ContactMessengerHandleType, String?) =
-			switch self.value.service {
-			case StructuredMessengerHandleTypeName.signal.rawValue: (.signal, nil)
-			case StructuredMessengerHandleTypeName.whatsapp.rawValue: (.whatsapp, nil)
-			case StructuredMessengerHandleTypeName.telegram.rawValue: (.telegram, nil)
-			case StructuredMessengerHandleTypeName.discord.rawValue: (.discord, nil)
-			default: (.custom, Self.localizedString(forLabel: self.value.service))
-			}
-		return StructuredMessengerHandle(handle: value.username, type: type, customTypeName: label ?? "")
-	}
-}
-
-extension StructuredMessengerHandle {
+private extension StructuredMessengerHandle {
 	func toLabeledValue() -> CNLabeledValue<CNInstantMessageAddress> {
 		let label =
 			switch self.type {
@@ -173,19 +125,7 @@ extension StructuredMessengerHandle {
 	}
 }
 
-extension CNLabeledValue<NSDateComponents> {
-	func toStructuredCustomDate() -> StructuredCustomDate {
-		let (type, label): (ContactCustomDateType, String?) =
-			switch self.label {
-			case CNLabelDateAnniversary: (.anniversary, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredCustomDate(dateIso: value.toIso(), type: type, customTypeName: label ?? "")
-	}
-}
-
-extension StructuredCustomDate {
+private extension StructuredCustomDate {
 	func toLabeledValue() -> CNLabeledValue<NSDateComponents>? {
 		guard let date = NSDateComponents.fromIso(self.dateIso) else { return nil }
 		let label =
@@ -198,45 +138,7 @@ extension StructuredCustomDate {
 	}
 }
 
-extension CNLabeledValue<CNPhoneNumber> {
-	func toStructuredPhoneNumber() -> StructuredPhoneNumber {
-		let (type, label): (ContactPhoneNumberType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelPhoneNumberMobile: (.mobile, nil)
-			case CNLabelPhoneNumberOtherFax: (.fax, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredPhoneNumber(number: self.value.stringValue, type: type, customTypeName: label ?? "")
-	}
-}
-
-extension CNLabeledValue<NSString> {
-	func toStructuredMailAddress() -> StructuredMailAddress {
-		let (type, label): (ContactAddressType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredMailAddress(address: self.value as String, type: type, customTypeName: label ?? "")
-	}
-	func toStructuredWebsite() -> StructuredWebsite {
-		let (type, label): (ContactWebsiteType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		return StructuredWebsite(url: self.value as String, type: type, customTypeName: label ?? "")
-	}
-}
-
-extension StructuredAddress {
+private extension StructuredAddress {
 	func toLabeledValue() -> CNLabeledValue<CNPostalAddress> {
 		let label =
 			switch self.type {
@@ -253,7 +155,7 @@ extension StructuredAddress {
 	}
 }
 
-extension StructuredWebsite {
+private extension StructuredWebsite {
 	func toLabeledValue() -> CNLabeledValue<NSString> {
 		let label =
 			switch self.type {
@@ -264,32 +166,4 @@ extension StructuredWebsite {
 			}
 		return CNLabeledValue(label: label, value: url as NSString)
 	}
-}
-
-extension CNLabeledValue<CNPostalAddress> {
-	func toStructuredAddress() -> StructuredAddress {
-		let (type, label): (ContactAddressType, String?) =
-			switch self.label {
-			case CNLabelHome: (._private, nil)
-			case CNLabelWork: (.work, nil)
-			case CNLabelOther: (.other, nil)
-			default: (.custom, localizeContactLabel(self))
-			}
-		let address = CNPostalAddressFormatter().string(from: self.value)
-		return StructuredAddress(address: address, type: type, customTypeName: label ?? "")
-	}
-}
-
-extension Hashable {
-	func computeHash() -> Int {
-		var hasher = Hasher()
-		hasher.combine(self)
-		return hasher.finalize()
-	}
-}
-
-/// Calls CNLabeledValue.localizedString, but accepts null values (if so, it returns nil)
-private func localizeContactLabel<ValueType>(_ what: CNLabeledValue<ValueType>) -> String? {
-	guard let label = what.label else { return nil }
-	return type(of: what).localizedString(forLabel: label)
 }
