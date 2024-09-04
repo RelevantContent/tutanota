@@ -5,8 +5,8 @@
 //  Created by Tutao GmbH on 03.09.24.
 //
 
-import Foundation
 import Contacts
+import Foundation
 
 struct UserContactMapping: Codable {
 	let username: String
@@ -24,23 +24,23 @@ class UserContactList {
 
 	init(nativeContactStoreFacade: NativeContactStoreFacade, username: String, mappingData: UserContactMapping?, stableHash: Bool? = nil) throws {
 		self.nativeContactStoreFacade = nativeContactStoreFacade
-		let group = try getTutaContactGroup()
-		self.mappingData = mappingData ?? UserContactMapping(
-			username: username,
-			systemGroupIdentifier: group.identifier,
-			localContactIdentifierToServerId: [:],
-			localContactIdentifierToHash: [:],
-			stableHash: stableHash
-		)
+		if let unwrappedMappingData = mappingData {
+			self.mappingData = unwrappedMappingData
+		} else {
+			let group = try nativeContactStoreFacade.createCNGroup(username: username)
+			self.mappingData = UserContactMapping(
+				username: username,
+				systemGroupIdentifier: group.identifier,
+				localContactIdentifierToServerId: [:],
+				localContactIdentifierToHash: [:],
+				stableHash: stableHash
+			)
+		}
 	}
 
-	func getMapping() -> UserContactMapping {
-		return mappingData
-	}
+	func getMapping() -> UserContactMapping { mappingData }
 
-	func getAllContacts() throws -> [CNContact] {
-		return try nativeContactStoreFacade.getAllContacts(inGroup: getTutaContactGroup())
-	}
+	func getAllContacts() throws -> [CNContact] { try nativeContactStoreFacade.getAllContacts(inGroup: getTutaContactGroup(), withSorting: nil) }
 
 	func insert(contacts: [StructuredContact]) throws {
 		let contactGroup = try self.getTutaContactGroup()
@@ -59,7 +59,7 @@ class UserContactList {
 			}
 		}
 
-		try nativeContactStoreFacade.insert(contacts: insertedContacts.map {$0.0}, toGroup: contactGroup)
+		try nativeContactStoreFacade.insert(contacts: insertedContacts.map { $0.0 }, toGroup: contactGroup)
 	}
 
 	func update(contacts: [(NativeMutableContact, StructuredContact)]) throws {
@@ -106,9 +106,8 @@ class UserContactList {
 			mappingData.localContactIdentifierToHash = [:]
 
 			// save the mapping right away so that if something later fails we won't have a dangling group
-//			tutaContactFacade.saveMapping(self)
+			//			tutaContactFacade.saveMapping(self)
 			return newGroup
 		}
 	}
 }
-

@@ -5,8 +5,8 @@
 //  Created by Tutao GmbH on 03.09.24.
 //
 
-import Foundation
 import Contacts
+import Foundation
 
 /// Defines a mutable contact and functionality for commiting the contact into a contact store
 class NativeMutableContact {
@@ -293,4 +293,3 @@ private func localizeContactLabel<ValueType>(_ what: CNLabeledValue<ValueType>) 
 	guard let label = what.label else { return nil }
 	return type(of: what).localizedString(forLabel: label)
 }
-

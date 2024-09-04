@@ -5,8 +5,8 @@
 //  Created by Tutao GmbH on 03.09.24.
 //
 
-import Foundation
 import Contacts
+import Foundation
 
 private let ALL_SUPPORTED_CONTACT_KEYS: [CNKeyDescriptor] =
 	[
@@ -39,8 +39,21 @@ class NativeContactStoreFacade {
 		}
 	}()
 
-	func getLocalContainer() -> String {
-		return localContainer
+	func getLocalContainer() -> String { localContainer }
+
+	func isLocalStorageAvailable() -> Bool {
+		let store = CNContactStore()
+
+		do {
+			let containers = try store.containers(matching: nil)
+			TUTSLog("Contact containers: \(containers.map { "\($0.name) \($0.type) \($0.type.rawValue)" }.joined(separator: ","))")
+
+			// Apple allow just ONE local container, so we can query for the first and unique one
+			return containers.contains(where: { $0.type == CNContainerType.local })
+		} catch {
+			TUTSLog("Failed to fetch containers: \(error)")
+			return false
+		}
 	}
 
 	func createCNGroup(username: String) throws -> CNMutableGroup {
@@ -80,10 +93,11 @@ class NativeContactStoreFacade {
 		try store.execute(saveRequest)
 	}
 
-	func getAllContacts(inGroup group: CNGroup) throws -> [CNContact] {
+	func getAllContacts(inGroup targetGroup: CNGroup?, withSorting desiredSorting: CNContactSortOrder?) throws -> [CNContact] {
 		let store = CNContactStore()
 		let fetch = makeContactFetchRequest()
-		fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier)
+		if let group = targetGroup { fetch.predicate = CNContact.predicateForContactsInGroup(withIdentifier: group.identifier) }
+		if let sorting = desiredSorting { fetch.sortOrder = sorting }
 
 		var contacts = [CNContact]()
 		try self.enumerateContactsInContactStore(store, with: fetch) { contact, _ in contacts.append(contact) }
@@ -91,13 +105,38 @@ class NativeContactStoreFacade {
 		return contacts
 	}
 
+	func queryContactSuggestions(query: String, upTo: Int) throws -> [ContactSuggestion] {
+		let contactsStore = CNContactStore()
+		let keysToFetch: [CNKeyDescriptor] = [
+			CNContactEmailAddressesKey as NSString,  // only NSString is CNKeyDescriptor
+			CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
+		]
+		let request = makeContactFetchRequest(forKeys: keysToFetch)
+		var result = [ContactSuggestion]()
+		// This method is synchronous. Enumeration prevents having all accounts in memory at once.
+		// We are doing the search manually because we can cannot combine predicates.
+		// Alternatively we could query for email and query for name separately and then combine the results
+		try self.enumerateContactsInContactStore(contactsStore, with: request) { contact, stopPointer in
+			let name: String = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
+			let matchesName = name.range(of: query, options: .caseInsensitive) != nil
+			for address in contact.emailAddresses {
+				let addressString = address.value as String
+				if matchesName || addressString.range(of: query, options: .caseInsensitive) != nil {
+					result.append(ContactSuggestion(name: name, mailAddress: addressString))
+				}
+				if result.count > upTo { stopPointer.initialize(to: true) }
+			}
+		}
+		return result
+	}
+
 	func insert(contacts: [NativeMutableContact], toGroup group: CNGroup) throws {
 		let store = CNContactStore()
 		let saveRequest = CNSaveRequest()
 
 		for nativeContact in contacts {
-				saveRequest.add(nativeContact.contact, toContainerWithIdentifier: localContainer)
-				saveRequest.addMember(nativeContact.contact, to: group)
+			saveRequest.add(nativeContact.contact, toContainerWithIdentifier: localContainer)
+			saveRequest.addMember(nativeContact.contact, to: group)
 		}
 
 		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not insert contacts", underlyingError: error) }
@@ -107,15 +146,12 @@ class NativeContactStoreFacade {
 		let store = CNContactStore()
 		let saveRequest = CNSaveRequest()
 
-		for nativeMutableContact in contacts {
-			saveRequest.update(nativeMutableContact.contact)
-		}
+		for nativeMutableContact in contacts { saveRequest.update(nativeMutableContact.contact) }
 
 		do { try store.execute(saveRequest) } catch { throw ContactStoreError(message: "Could not update contacts", underlyingError: error) }
 	}
 
 	func delete(localContacts nativeIdentifiersToRemove: [String]) throws {
-		
 		let store = CNContactStore()
 		let fetch = makeContactFetchRequest(forKeys: [CNContactIdentifierKey] as [CNKeyDescriptor])
 
@@ -139,13 +175,11 @@ class NativeContactStoreFacade {
 
 	/// Create a fetch request that also loads data for a set of keys on each contact, ensuring that only real, non-unified contacts are pulled from the contact store.
 	func makeContactFetchRequest(forKeys keysToFetch: [CNKeyDescriptor]) -> CNContactFetchRequest {
-		var fetchRequest = CNContactFetchRequest(keysToFetch: keysToFetch)
+		let fetchRequest = CNContactFetchRequest(keysToFetch: keysToFetch)
 		fetchRequest.unifyResults = false
 		return fetchRequest
 	}
 
 	/// Create a fetch request that gets all supported keys, ensuring only real, non-unified contacts are pulled from the contact store.
-	func makeContactFetchRequest() -> CNContactFetchRequest {
-		makeContactFetchRequest(forKeys: ALL_SUPPORTED_CONTACT_KEYS)
-	}
+	func makeContactFetchRequest() -> CNContactFetchRequest { makeContactFetchRequest(forKeys: ALL_SUPPORTED_CONTACT_KEYS) }
 }

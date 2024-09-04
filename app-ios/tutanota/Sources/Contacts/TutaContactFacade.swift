@@ -5,9 +5,9 @@
 //  Created by Tutao GmbH on 03.09.24.
 //
 
-import Foundation
-import DictionaryCoding
 import Contacts
+import DictionaryCoding
+import Foundation
 
 private let CONTACTS_MAPPINGS = "ContactsMappings"
 
@@ -21,9 +21,7 @@ class TutaContactFacade {
 		self.userDefaults = userDefault
 	}
 
-	func getLocalContainer() -> String {
-		return nativeContactStoreFacade.getLocalContainer()
-	}
+	func getLocalContainer() -> String { nativeContactStoreFacade.getLocalContainer() }
 
 	private func getMappingsDictionary() -> [String: [String: Any]] {
 		self.userDefaults.dictionary(forKey: CONTACTS_MAPPINGS) as! [String: [String: Any]]? ?? [:]
@@ -67,17 +65,44 @@ class TutaContactFacade {
 			return mapping
 		} else {
 			TUTSLog("MobileContactsFacade: creating new mapping for \(username)")
-			let mapping = try UserContactList(
-				nativeContactStoreFacade: self.nativeContactStoreFacade,
-				username: username,
-				mappingData: nil,
-				stableHash: true
-			)
+			let mapping = try UserContactList(nativeContactStoreFacade: self.nativeContactStoreFacade, username: username, mappingData: nil, stableHash: true)
 			self.saveContactList(mapping)
 			return mapping
 		}
 	}
-	
+
+	func getAllContacts(withSorting desiredSorting: CNContactSortOrder?) throws -> [StructuredContact] {
+		try nativeContactStoreFacade.getAllContacts(inGroup: nil, withSorting: desiredSorting)
+			.map { nativeContact in nativeContact.toStructuredContact(serverId: nil) }
+	}
+
+	/// Gets contacts from the devices which are not a part of a Tuta contact list
+	func getUnhandledContacts() {
+
+	}
+
+	func queryContactSuggestions(query: String, upTo: Int) throws -> [ContactSuggestion] {
+		try nativeContactStoreFacade.queryContactSuggestions(query: query, upTo: upTo)
+	}
+
+	func getDuplicateContacts(_ username: String) async throws -> [StructuredContact] {
+		let contactList = self.getContactList(username: username)!
+		let mapping = contactList.getMapping()
+
+		var contacts = [StructuredContact]()
+		for contact in try self.nativeContactStoreFacade.getAllContacts(inGroup: nil, withSorting: nil) {
+			let iOSId = contact.identifier
+			if mapping.localContactIdentifierToHash[iOSId] != nil {
+				let serverId = mapping.localContactIdentifierToServerId[iOSId]
+				contacts.append(contact.toStructuredContact(serverId: serverId))
+			}
+		}
+
+		return contacts
+	}
+
+	func isLocalStorageAvailable() -> Bool { nativeContactStoreFacade.isLocalStorageAvailable() }
+
 }
 
 extension CNContact {
