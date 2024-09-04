@@ -567,7 +567,7 @@ o.spec("KeyRotationFacadeTest", function () {
 					o(groupKeyUpdateData.sessionKeyEncGroupKey).deepEquals(MEMBER1_SESSION_KEY_ENC_NEW_USER_AREA_GROUP_KEY)
 					o(groupKeyUpdateData.bucketKeyEncSessionKey).deepEquals(MEMBER1_BUCKET_KEY_ENC_MEMBER1_SESSION_KEY)
 					const pubEncBucketKeyData = groupKeyUpdateData.pubEncBucketKeyData
-					o(pubEncBucketKeyData.pubEncSymKey).deepEquals(pubEncBucketKeyMock)
+					o(pubEncBucketKeyData.pubEncSymKeyBytes).deepEquals(pubEncBucketKeyMock)
 					o(pubEncBucketKeyData.protocolVersion).deepEquals(protocolVersion)
 					o(pubEncBucketKeyData.senderKeyVersion).deepEquals(user.userGroup.groupKeyVersion)
 					o(pubEncBucketKeyData.recipientKeyVersion).deepEquals(recipientKeyVersion)

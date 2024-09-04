@@ -1,6 +1,6 @@
-import { create, Stripped, StrippedEntity } from "../../common/utils/EntityUtils.js"
-import {TypeRef} from "@tutao/tutanota-utils"
-import {typeModels} from "./TypeModels.js"
+import { create, StrippedEntity } from "../../common/utils/EntityUtils.js"
+import { TypeRef } from "@tutao/tutanota-utils"
+import { typeModels } from "./TypeModels.js"
 
 
 export const AccountingInfoTypeRef: TypeRef<AccountingInfo> = new TypeRef("sys", "AccountingInfo")
@@ -2319,7 +2319,7 @@ export type PubEncKeyData = {
 	identifier: string;
 	identifierType: NumberString;
 	protocolVersion: NumberString;
-	pubEncSymKey: Uint8Array;
+	pubEncSymKeyBytes: Uint8Array;
 	recipientKeyVersion: NumberString;
 	senderKeyVersion: null | NumberString;
 }
