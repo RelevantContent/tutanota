@@ -1,6 +1,7 @@
-import { create, Stripped, StrippedEntity } from "../../common/utils/EntityUtils.js"
-import {TypeRef} from "@tutao/tutanota-utils"
-import {typeModels} from "./TypeModels.js"
+import { create, StrippedEntity } from "../../common/utils/EntityUtils.js"
+import { TypeRef } from "@tutao/tutanota-utils"
+import { typeModels } from "./TypeModels.js"
+import { EncryptedPqKeyPairs } from "@tutao/tutanota-crypto"
 
 
 export const AccountingInfoTypeRef: TypeRef<AccountingInfo> = new TypeRef("sys", "AccountingInfo")
@@ -34,8 +35,8 @@ export type AccountingInfo = {
 	paypalBillingAgreement: null | string;
 	secondCountryInfo: NumberString;
 
-	appStoreSubscription:  null | IdTuple;
-	invoiceInfo:  null | Id;
+	appStoreSubscription: null | IdTuple;
+	invoiceInfo: null | Id;
 }
 export const AdminGroupKeyRotationPostInTypeRef: TypeRef<AdminGroupKeyRotationPostIn> = new TypeRef("sys", "AdminGroupKeyRotationPostIn")
 
@@ -96,7 +97,7 @@ export type AlarmNotification = {
 
 	alarmInfo: AlarmInfo;
 	notificationSessionKeys: NotificationSessionKey[];
-	repeatRule:  null | RepeatRule;
+	repeatRule: null | RepeatRule;
 	user: Id;
 }
 export const AlarmServicePostTypeRef: TypeRef<AlarmServicePost> = new TypeRef("sys", "AlarmServicePost")
@@ -162,8 +163,8 @@ export type AuditLogEntry = {
 	date: Date;
 	modifiedEntity: string;
 
-	groupInfo:  null | IdTuple;
-	modifiedGroupInfo:  null | IdTuple;
+	groupInfo: null | IdTuple;
+	modifiedGroupInfo: null | IdTuple;
 }
 export const AuditLogRefTypeRef: TypeRef<AuditLogRef> = new TypeRef("sys", "AuditLogRef")
 
@@ -417,7 +418,7 @@ export type BrandingDomainGetReturn = {
 
 	_format: NumberString;
 
-	certificateInfo:  null | CertificateInfo;
+	certificateInfo: null | CertificateInfo;
 }
 export const BucketTypeRef: TypeRef<Bucket> = new TypeRef("sys", "Bucket")
 
@@ -449,7 +450,7 @@ export type BucketKey = {
 	senderKeyVersion: null | NumberString;
 
 	bucketEncSessionKeys: InstanceSessionKey[];
-	keyGroup:  null | Id;
+	keyGroup: null | Id;
 }
 export const BucketPermissionTypeRef: TypeRef<BucketPermission> = new TypeRef("sys", "BucketPermission")
 
@@ -503,7 +504,7 @@ export type CertificateInfo = {
 	state: NumberString;
 	type: NumberString;
 
-	certificate:  null | Id;
+	certificate: null | Id;
 }
 export const ChallengeTypeRef: TypeRef<Challenge> = new TypeRef("sys", "Challenge")
 
@@ -517,8 +518,8 @@ export type Challenge = {
 	_id: Id;
 	type: NumberString;
 
-	otp:  null | OtpChallenge;
-	u2f:  null | U2fChallenge;
+	otp: null | OtpChallenge;
+	u2f: null | U2fChallenge;
 }
 export const ChangeKdfPostInTypeRef: TypeRef<ChangeKdfPostIn> = new TypeRef("sys", "ChangeKdfPostIn")
 
@@ -627,7 +628,7 @@ export type CreateSessionData = {
 	mailAddress: null | string;
 	recoverCodeVerifier: null | string;
 
-	user:  null | Id;
+	user: null | Id;
 }
 export const CreateSessionReturnTypeRef: TypeRef<CreateSessionReturn> = new TypeRef("sys", "CreateSessionReturn")
 
@@ -672,7 +673,7 @@ export type CustomDomainCheckGetIn = {
 	_format: NumberString;
 	domain: string;
 
-	customer:  null | Id;
+	customer: null | Id;
 }
 export const CustomDomainCheckGetOutTypeRef: TypeRef<CustomDomainCheckGetOut> = new TypeRef("sys", "CustomDomainCheckGetOut")
 
@@ -702,7 +703,7 @@ export type CustomDomainData = {
 	_format: NumberString;
 	domain: string;
 
-	catchAllMailGroup:  null | Id;
+	catchAllMailGroup: null | Id;
 }
 export const CustomDomainReturnTypeRef: TypeRef<CustomDomainReturn> = new TypeRef("sys", "CustomDomainReturn")
 
@@ -738,21 +739,21 @@ export type Customer = {
 
 	adminGroup: Id;
 	adminGroups: Id;
-	auditLog:  null | AuditLogRef;
+	auditLog: null | AuditLogRef;
 	customerGroup: Id;
 	customerGroups: Id;
 	customerInfo: IdTuple;
 	customizations: Feature[];
-	orderProcessingAgreement:  null | IdTuple;
-	properties:  null | Id;
-	referralCode:  null | Id;
-	rejectedSenders:  null | RejectedSendersRef;
-	serverProperties:  null | Id;
+	orderProcessingAgreement: null | IdTuple;
+	properties: null | Id;
+	referralCode: null | Id;
+	rejectedSenders: null | RejectedSendersRef;
+	serverProperties: null | Id;
 	teamGroups: Id;
-	userAreaGroups:  null | UserAreaGroups;
+	userAreaGroups: null | UserAreaGroups;
 	userGroups: Id;
-	whitelabelChildren:  null | WhitelabelChildrenRef;
-	whitelabelParent:  null | WhitelabelParent;
+	whitelabelChildren: null | WhitelabelChildrenRef;
+	whitelabelParent: null | WhitelabelParent;
 }
 export const CustomerAccountTerminationPostInTypeRef: TypeRef<CustomerAccountTerminationPostIn> = new TypeRef("sys", "CustomerAccountTerminationPostIn")
 
@@ -766,7 +767,7 @@ export type CustomerAccountTerminationPostIn = {
 	_format: NumberString;
 	terminationDate: null | Date;
 
-	surveyData:  null | SurveyData;
+	surveyData: null | SurveyData;
 }
 export const CustomerAccountTerminationPostOutTypeRef: TypeRef<CustomerAccountTerminationPostOut> = new TypeRef("sys", "CustomerAccountTerminationPostOut")
 
@@ -832,15 +833,15 @@ export type CustomerInfo = {
 	usedSharedEmailAliases: NumberString;
 
 	accountingInfo: Id;
-	bookings:  null | BookingsRef;
-	customPlan:  null | PlanConfiguration;
+	bookings: null | BookingsRef;
+	customPlan: null | PlanConfiguration;
 	customer: Id;
 	domainInfos: DomainInfo[];
-	giftCards:  null | GiftCardsRef;
-	referredBy:  null | Id;
-	supportInfo:  null | Id;
-	takeoverCustomer:  null | Id;
-	terminationRequest:  null | IdTuple;
+	giftCards: null | GiftCardsRef;
+	referredBy: null | Id;
+	supportInfo: null | Id;
+	takeoverCustomer: null | Id;
+	terminationRequest: null | IdTuple;
 }
 export const CustomerPropertiesTypeRef: TypeRef<CustomerProperties> = new TypeRef("sys", "CustomerProperties")
 
@@ -859,9 +860,9 @@ export type CustomerProperties = {
 	lastUpgradeReminder: null | Date;
 	usageDataOptedOut: boolean;
 
-	bigLogo:  null | File;
+	bigLogo: null | File;
 	notificationMailTemplates: NotificationMailTemplate[];
-	smallLogo:  null | File;
+	smallLogo: null | File;
 }
 export const CustomerServerPropertiesTypeRef: TypeRef<CustomerServerProperties> = new TypeRef("sys", "CustomerServerProperties")
 
@@ -885,7 +886,7 @@ export type CustomerServerProperties = {
 
 	emailSenderList: EmailSenderListElement[];
 	whitelabelRegistrationDomains: StringWrapper[];
-	whitelistedDomains:  null | DomainsRef;
+	whitelistedDomains: null | DomainsRef;
 }
 export const DateWrapperTypeRef: TypeRef<DateWrapper> = new TypeRef("sys", "DateWrapper")
 
@@ -910,7 +911,7 @@ export type DebitServicePutData = {
 
 	_format: NumberString;
 
-	invoice:  null | IdTuple;
+	invoice: null | IdTuple;
 }
 export const DeleteCustomerDataTypeRef: TypeRef<DeleteCustomerData> = new TypeRef("sys", "DeleteCustomerData")
 
@@ -928,7 +929,7 @@ export type DeleteCustomerData = {
 	undelete: boolean;
 
 	customer: Id;
-	surveyData:  null | SurveyData;
+	surveyData: null | SurveyData;
 }
 export const DnsRecordTypeRef: TypeRef<DnsRecord> = new TypeRef("sys", "DnsRecord")
 
@@ -957,8 +958,8 @@ export type DomainInfo = {
 	domain: string;
 	validatedMxRecord: boolean;
 
-	catchAllMailGroup:  null | Id;
-	whitelabelConfig:  null | Id;
+	catchAllMailGroup: null | Id;
+	whitelabelConfig: null | Id;
 }
 export const DomainMailAddressAvailabilityDataTypeRef: TypeRef<DomainMailAddressAvailabilityData> = new TypeRef("sys", "DomainMailAddressAvailabilityData")
 
@@ -1070,8 +1071,8 @@ export type ExternalPropertiesReturn = {
 	accountType: NumberString;
 	message: string;
 
-	bigLogo:  null | File;
-	smallLogo:  null | File;
+	bigLogo: null | File;
+	smallLogo: null | File;
 }
 export const ExternalUserReferenceTypeRef: TypeRef<ExternalUserReference> = new TypeRef("sys", "ExternalUserReference")
 
@@ -1284,18 +1285,18 @@ export type Group = {
 	groupKeyVersion: NumberString;
 	type: NumberString;
 
-	admin:  null | Id;
-	administratedGroups:  null | AdministratedGroupsRef;
+	admin: null | Id;
+	administratedGroups: null | AdministratedGroupsRef;
 	archives: ArchiveType[];
-	currentKeys:  null | KeyPair;
-	customer:  null | Id;
-	formerGroupKeys:  null | GroupKeysRef;
+	currentKeys: null | KeyPair;
+	customer: null | Id;
+	formerGroupKeys: null | GroupKeysRef;
 	groupInfo: IdTuple;
 	invitations: Id;
 	members: Id;
-	pubAdminGroupEncGKey:  null | PubEncKeyData;
-	storageCounter:  null | Id;
-	user:  null | Id;
+	pubAdminGroupEncGKey: null | PubEncKeyData;
+	storageCounter: null | Id;
+	user: null | Id;
 }
 export const GroupInfoTypeRef: TypeRef<GroupInfo> = new TypeRef("sys", "GroupInfo")
 
@@ -1321,7 +1322,7 @@ export type GroupInfo = {
 	name: string;
 
 	group: Id;
-	localAdmin:  null | Id;
+	localAdmin: null | Id;
 	mailAddressAliases: MailAddressAlias[];
 }
 export const GroupKeyTypeRef: TypeRef<GroupKey> = new TypeRef("sys", "GroupKey")
@@ -1342,8 +1343,8 @@ export type GroupKey = {
 	ownerEncGKey: Uint8Array;
 	ownerKeyVersion: NumberString;
 
-	keyPair:  null | KeyPair;
-	pubAdminGroupEncGKey:  null | PubEncKeyData;
+	keyPair: null | KeyPair;
+	pubAdminGroupEncGKey: null | PubEncKeyData;
 }
 export const GroupKeyRotationDataTypeRef: TypeRef<GroupKeyRotationData> = new TypeRef("sys", "GroupKeyRotationData")
 
@@ -1541,7 +1542,7 @@ export type GroupRoot = {
 	_permissions: Id;
 
 	externalGroupInfos: Id;
-	externalUserAreaGroupInfos:  null | UserAreaGroups;
+	externalUserAreaGroupInfos: null | UserAreaGroups;
 	externalUserReferences: Id;
 }
 export const IdTupleWrapperTypeRef: TypeRef<IdTupleWrapper> = new TypeRef("sys", "IdTupleWrapper")
@@ -1690,7 +1691,7 @@ export type InvoiceInfo = {
 	specialPriceUserTotal: null | NumberString;
 
 	invoices: Id;
-	paymentErrorInfo:  null | PaymentErrorInfo;
+	paymentErrorInfo: null | PaymentErrorInfo;
 }
 export const InvoiceItemTypeRef: TypeRef<InvoiceItem> = new TypeRef("sys", "InvoiceItem")
 
@@ -1880,7 +1881,7 @@ export type MailAddressToGroup = {
 	_ownerGroup: null | Id;
 	_permissions: Id;
 
-	internalGroup:  null | Id;
+	internalGroup: null | Id;
 }
 export const MembershipAddDataTypeRef: TypeRef<MembershipAddData> = new TypeRef("sys", "MembershipAddData")
 
@@ -1988,7 +1989,7 @@ export type NotificationInfo = {
 	mailAddress: string;
 	userId: Id;
 
-	mailId:  null | IdTupleWrapper;
+	mailId: null | IdTupleWrapper;
 }
 export const NotificationMailTemplateTypeRef: TypeRef<NotificationMailTemplate> = new TypeRef("sys", "NotificationMailTemplate")
 
@@ -2112,7 +2113,7 @@ export type PaymentDataServicePutData = {
 	paymentMethodInfo: null | string;
 	paymentToken: null | string;
 
-	creditCard:  null | CreditCard;
+	creditCard: null | CreditCard;
 }
 export const PaymentDataServicePutReturnTypeRef: TypeRef<PaymentDataServicePutReturn> = new TypeRef("sys", "PaymentDataServicePutReturn")
 
@@ -2126,7 +2127,7 @@ export type PaymentDataServicePutReturn = {
 	_format: NumberString;
 	result: NumberString;
 
-	braintree3dsRequest:  null | Braintree3ds2Request;
+	braintree3dsRequest: null | Braintree3ds2Request;
 }
 export const PaymentErrorInfoTypeRef: TypeRef<PaymentErrorInfo> = new TypeRef("sys", "PaymentErrorInfo")
 
@@ -2165,8 +2166,8 @@ export type Permission = {
 	symKeyVersion: null | NumberString;
 	type: NumberString;
 
-	bucket:  null | Bucket;
-	group:  null | Id;
+	bucket: null | Bucket;
+	group: null | Id;
 }
 export const PlanConfigurationTypeRef: TypeRef<PlanConfiguration> = new TypeRef("sys", "PlanConfiguration")
 
@@ -2287,7 +2288,7 @@ export type PriceServiceData = {
 	_format: NumberString;
 	date: null | Date;
 
-	priceRequest:  null | PriceRequestData;
+	priceRequest: null | PriceRequestData;
 }
 export const PriceServiceReturnTypeRef: TypeRef<PriceServiceReturn> = new TypeRef("sys", "PriceServiceReturn")
 
@@ -2302,9 +2303,9 @@ export type PriceServiceReturn = {
 	currentPeriodAddedPrice: null | NumberString;
 	periodEndDate: Date;
 
-	currentPriceNextPeriod:  null | PriceData;
-	currentPriceThisPeriod:  null | PriceData;
-	futurePriceNextPeriod:  null | PriceData;
+	currentPriceNextPeriod: null | PriceData;
+	currentPriceThisPeriod: null | PriceData;
+	futurePriceNextPeriod: null | PriceData;
 }
 export const PubEncKeyDataTypeRef: TypeRef<PubEncKeyData> = new TypeRef("sys", "PubEncKeyData")
 
@@ -2712,7 +2713,7 @@ export type SecondFactor = {
 	otpSecret: null | Uint8Array;
 	type: NumberString;
 
-	u2f:  null | U2fRegisteredDevice;
+	u2f: null | U2fRegisteredDevice;
 }
 export const SecondFactorAuthAllowedReturnTypeRef: TypeRef<SecondFactorAuthAllowedReturn> = new TypeRef("sys", "SecondFactorAuthAllowedReturn")
 
@@ -2739,9 +2740,9 @@ export type SecondFactorAuthData = {
 	otpCode: null | NumberString;
 	type: null | NumberString;
 
-	session:  null | IdTuple;
-	u2f:  null | U2fResponseData;
-	webauthn:  null | WebauthnResponseData;
+	session: null | IdTuple;
+	u2f: null | U2fResponseData;
+	webauthn: null | WebauthnResponseData;
 }
 export const SecondFactorAuthDeleteDataTypeRef: TypeRef<SecondFactorAuthDeleteData> = new TypeRef("sys", "SecondFactorAuthDeleteData")
 
@@ -2841,7 +2842,7 @@ export type SentGroupInvitation = {
 	capability: NumberString;
 	inviteeMailAddress: string;
 
-	receivedInvitation:  null | IdTuple;
+	receivedInvitation: null | IdTuple;
 	sharedGroup: Id;
 }
 export const SessionTypeRef: TypeRef<Session> = new TypeRef("sys", "Session")
@@ -2953,8 +2954,8 @@ export type SwitchAccountTypePostIn = {
 	plan: NumberString;
 	specialPriceUserSingle: null | NumberString;
 
-	referralCode:  null | Id;
-	surveyData:  null | SurveyData;
+	referralCode: null | Id;
+	surveyData: null | SurveyData;
 }
 export const SystemKeysReturnTypeRef: TypeRef<SystemKeysReturn> = new TypeRef("sys", "SystemKeysReturn")
 
@@ -2975,8 +2976,8 @@ export type SystemKeysReturn = {
 	systemAdminPubKyberKey: null | Uint8Array;
 	systemAdminPubRsaKey: null | Uint8Array;
 
-	freeGroup:  null | Id;
-	premiumGroup:  null | Id;
+	freeGroup: null | Id;
+	premiumGroup: null | Id;
 }
 export const TakeOverDeletedAddressDataTypeRef: TypeRef<TakeOverDeletedAddressData> = new TypeRef("sys", "TakeOverDeletedAddressData")
 
@@ -3107,7 +3108,7 @@ export type UpgradePriceServiceData = {
 	campaign: null | string;
 	date: null | Date;
 
-	referralCode:  null | Id;
+	referralCode: null | Id;
 }
 export const UpgradePriceServiceReturnTypeRef: TypeRef<UpgradePriceServiceReturn> = new TypeRef("sys", "UpgradePriceServiceReturn")
 
@@ -3156,14 +3157,14 @@ export type User = {
 	salt: null | Uint8Array;
 	verifier: Uint8Array;
 
-	alarmInfoList:  null | UserAlarmInfoListType;
-	auth:  null | UserAuthentication;
+	alarmInfoList: null | UserAlarmInfoListType;
+	auth: null | UserAuthentication;
 	authenticatedDevices: AuthenticatedDevice[];
-	customer:  null | Id;
-	externalAuthInfo:  null | UserExternalAuthInfo;
+	customer: null | Id;
+	externalAuthInfo: null | UserExternalAuthInfo;
 	failedLogins: Id;
 	memberships: GroupMembership[];
-	pushIdentifierList:  null | PushIdentifierList;
+	pushIdentifierList: null | PushIdentifierList;
 	secondFactorAuthentications: Id;
 	successfulLogins: Id;
 	userGroup: GroupMembership;
@@ -3224,7 +3225,7 @@ export type UserAuthentication = {
 
 	_id: Id;
 
-	recoverCode:  null | Id;
+	recoverCode: null | Id;
 	secondFactors: Id;
 	sessions: Id;
 }
@@ -3296,8 +3297,8 @@ export type UserGroupKeyRotationData = {
 
 	group: Id;
 	keyPair: KeyPair;
-	pubAdminGroupEncUserGroupKey:  null | PubEncKeyData;
-	recoverCodeData:  null | RecoverCodeData;
+	pubAdminGroupEncUserGroupKey: null | PubEncKeyData;
+	recoverCodeData: null | RecoverCodeData;
 }
 export const UserGroupKeyRotationPostInTypeRef: TypeRef<UserGroupKeyRotationPostIn> = new TypeRef("sys", "UserGroupKeyRotationPostIn")
 
@@ -3326,9 +3327,9 @@ export type UserGroupRoot = {
 	_ownerGroup: null | Id;
 	_permissions: Id;
 
-	groupKeyUpdates:  null | GroupKeyUpdatesRef;
+	groupKeyUpdates: null | GroupKeyUpdatesRef;
 	invitations: Id;
-	keyRotations:  null | KeyRotationsRef;
+	keyRotations: null | KeyRotationsRef;
 }
 export const VariableExternalAuthInfoTypeRef: TypeRef<VariableExternalAuthInfo> = new TypeRef("sys", "VariableExternalAuthInfo")
 
@@ -3557,7 +3558,7 @@ export type WhitelabelConfig = {
 	whitelabelCode: string;
 
 	bootstrapCustomizations: BootstrapFeature[];
-	certificateInfo:  null | CertificateInfo;
+	certificateInfo: null | CertificateInfo;
 	whitelabelRegistrationDomains: StringWrapper[];
 }
 export const WhitelabelParentTypeRef: TypeRef<WhitelabelParent> = new TypeRef("sys", "WhitelabelParent")
