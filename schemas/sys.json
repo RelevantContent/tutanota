@@ -428,6 +428,16 @@
 					"name": "AddAssociation",
 					"sourceType": "Group",
 					"info": "AddAssociation Group/pubAdminGroupEncGKey/AGGREGATION/2460."
+				},
+				{
+					"name": "RemoveValue",
+					"sourceType": "GroupKey",
+					"info": "RemoveValue GroupKey/pubAdminGroupEncGKey/2264."
+				},
+				{
+					"name": "AddAssociation",
+					"sourceType": "GroupKey",
+					"info": "AddAssociation GroupKey/pubAdminGroupEncGKey/AGGREGATION/2461."
 				}
 			]
 		}

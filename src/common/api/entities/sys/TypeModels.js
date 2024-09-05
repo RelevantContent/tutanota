@@ -5463,15 +5463,6 @@ export const typeModels = {
                 "type": "Number",
                 "cardinality": "One",
                 "encrypted": false
-            },
-            "pubAdminGroupEncGKey": {
-                "final": false,
-                "name": "pubAdminGroupEncGKey",
-                "id": 2264,
-                "since": 96,
-                "type": "Bytes",
-                "cardinality": "ZeroOrOne",
-                "encrypted": false
             }
         },
         "associations": {
@@ -5483,6 +5474,16 @@ export const typeModels = {
                 "type": "AGGREGATION",
                 "cardinality": "ZeroOrOne",
                 "refType": "KeyPair",
+                "dependency": null
+            },
+            "pubAdminGroupEncGKey": {
+                "final": true,
+                "name": "pubAdminGroupEncGKey",
+                "id": 2461,
+                "since": 110,
+                "type": "AGGREGATION",
+                "cardinality": "ZeroOrOne",
+                "refType": "PubEncKeyData",
                 "dependency": null
             }
         },

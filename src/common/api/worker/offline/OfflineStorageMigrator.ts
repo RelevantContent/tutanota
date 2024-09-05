@@ -67,8 +67,8 @@ export const OFFLINE_STORAGE_MIGRATIONS: ReadonlyArray<OfflineMigration> = [
 	sys106,
 	tutanota74,
 	sys107,
-	sys110,
 	tutanota75,
+	sys110,
 ]
 
 const CURRENT_OFFLINE_VERSION = 1

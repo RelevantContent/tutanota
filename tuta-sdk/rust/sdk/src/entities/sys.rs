@@ -1585,9 +1585,8 @@ pub struct GroupKey {
 	#[serde(with = "serde_bytes")]
 	pub ownerEncGKey: Vec<u8>,
 	pub ownerKeyVersion: i64,
-	#[serde(with = "serde_bytes")]
-	pub pubAdminGroupEncGKey: Option<Vec<u8>>,
 	pub keyPair: Option<KeyPair>,
+	pub pubAdminGroupEncGKey: Option<PubEncKeyData>,
 }
 
 impl Entity for GroupKey {

@@ -1,6 +1,6 @@
-import { create, StrippedEntity } from "../../common/utils/EntityUtils.js"
-import { TypeRef } from "@tutao/tutanota-utils"
-import { typeModels } from "./TypeModels.js"
+import { create, Stripped, StrippedEntity } from "../../common/utils/EntityUtils.js"
+import {TypeRef} from "@tutao/tutanota-utils"
+import {typeModels} from "./TypeModels.js"
 
 
 export const AccountingInfoTypeRef: TypeRef<AccountingInfo> = new TypeRef("sys", "AccountingInfo")
@@ -1341,9 +1341,9 @@ export type GroupKey = {
 	adminGroupKeyVersion: null | NumberString;
 	ownerEncGKey: Uint8Array;
 	ownerKeyVersion: NumberString;
-	pubAdminGroupEncGKey: null | Uint8Array;
 
 	keyPair:  null | KeyPair;
+	pubAdminGroupEncGKey:  null | PubEncKeyData;
 }
 export const GroupKeyRotationDataTypeRef: TypeRef<GroupKeyRotationData> = new TypeRef("sys", "GroupKeyRotationData")
 
