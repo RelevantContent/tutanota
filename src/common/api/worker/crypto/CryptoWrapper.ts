@@ -6,14 +6,29 @@ import {
 	AesKey,
 	decryptKey,
 	EccPrivateKey,
+	ENABLE_MAC,
 	encryptEccKey,
 	encryptKey,
 	encryptKyberKey,
+	IV_BYTE_LENGTH,
 	KyberPrivateKey,
 	KyberPublicKey,
 	kyberPublicKeyToBytes,
+	random,
 } from "@tutao/tutanota-crypto"
-import { encryptBytes, encryptKeyWithVersionedKey, VersionedEncryptedKey, VersionedKey } from "./CryptoFacade.js"
+import { stringToUtf8Uint8Array, Versioned } from "@tutao/tutanota-utils"
+
+/**
+ * An AesKey (usually a group key) and its version.
+ */
+export type VersionedKey = Versioned<AesKey>
+/**
+ * A key that is encrypted with a given version of some other key.
+ */
+export type VersionedEncryptedKey = {
+	encryptingKeyVersion: number // the version of the encryption key NOT the encrypted key
+	key: Uint8Array // encrypted key
+}
 
 export interface CryptoWrapper {
 	aes256RandomKey(): Aes256Key
@@ -35,6 +50,8 @@ export interface CryptoWrapper {
 	kyberPublicKeyToBytes(kyberPublicKey: KyberPublicKey): Uint8Array
 
 	encryptBytes(sk: AesKey, value: Uint8Array): Uint8Array
+
+	encryptString(sk: AesKey, value: string): Uint8Array
 }
 
 export const cryptoWrapper: CryptoWrapper = {
@@ -65,8 +82,30 @@ export const cryptoWrapper: CryptoWrapper = {
 	kyberPublicKeyToBytes(kyberPublicKey: KyberPublicKey): Uint8Array {
 		return kyberPublicKeyToBytes(kyberPublicKey)
 	},
-
 	encryptBytes(sk: AesKey, value: Uint8Array): Uint8Array {
 		return encryptBytes(sk, value)
 	},
+	encryptString(sk: AesKey, value: string): Uint8Array {
+		return encryptString(sk, value)
+	},
+}
+
+export function encryptBytes(sk: AesKey, value: Uint8Array): Uint8Array {
+	return aesEncrypt(sk, value, random.generateRandomData(IV_BYTE_LENGTH), true, ENABLE_MAC)
+}
+
+export function encryptString(sk: AesKey, value: string): Uint8Array {
+	return aesEncrypt(sk, stringToUtf8Uint8Array(value), random.generateRandomData(IV_BYTE_LENGTH), true, ENABLE_MAC)
+}
+
+/**
+ * Encrypts the key with the encryptingKey and return the encrypted key and the version of the encryptingKey.
+ * @param encryptingKey the encrypting key.
+ * @param key the key to be encrypted.
+ */
+export function encryptKeyWithVersionedKey(encryptingKey: VersionedKey, key: AesKey): VersionedEncryptedKey {
+	return {
+		encryptingKeyVersion: encryptingKey.version,
+		key: encryptKey(encryptingKey.object, key),
+	}
 }

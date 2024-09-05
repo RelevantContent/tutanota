@@ -6,9 +6,9 @@ import { aes256RandomKey, aesEncrypt, AesKey, decryptKey, IV_BYTE_LENGTH, random
 import { UserFacade } from "../UserFacade.js"
 import { EncryptedDbKeyBaseMetaData, EncryptedIndexerMetaData, Metadata, ObjectStoreName } from "../../search/IndexTables.js"
 import { DbError } from "../../../common/error/DbError.js"
-import { encryptKeyWithVersionedKey, VersionedKey } from "../../crypto/CryptoFacade.js"
 import { KeyLoaderFacade } from "../KeyLoaderFacade.js"
 import type { QueuedBatch } from "../../EventQueue.js"
+import { encryptKeyWithVersionedKey, VersionedKey } from "../../crypto/CryptoWrapper.js"
 
 const VERSION: number = 2
 const DB_KEY_PREFIX: string = "ConfigStorage"

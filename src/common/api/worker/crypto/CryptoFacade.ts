@@ -73,7 +73,6 @@ import {
 	decryptKey,
 	EccKeyPair,
 	EccPublicKey,
-	ENABLE_MAC,
 	encryptEccKey,
 	encryptKey,
 	generateEccKeyPair,
@@ -83,11 +82,8 @@ import {
 	isRsaEccKeyPair,
 	isRsaOrRsaEccKeyPair,
 	isRsaPublicKey,
-	IV_BYTE_LENGTH,
 	KeyPairType,
 	PQPublicKeys,
-	random,
-	RsaPrivateKey,
 	sha256Hash,
 	uint8ArrayToBitArray,
 } from "@tutao/tutanota-crypto"
@@ -105,16 +101,10 @@ import { DefaultEntityRestCache } from "../rest/DefaultEntityRestCache.js"
 import { CryptoError } from "@tutao/tutanota-crypto/error.js"
 import { KeyLoaderFacade } from "../facades/KeyLoaderFacade.js"
 import { ProgrammingError } from "../../common/error/ProgrammingError.js"
+import { encryptKeyWithVersionedKey, VersionedEncryptedKey, VersionedKey } from "./CryptoWrapper.js"
+import { AsymmetricCryptoFacade } from "./AsymmetricCryptoFacade.js"
 
 assertWorkerOrNode()
-
-export function encryptBytes(sk: AesKey, value: Uint8Array): Uint8Array {
-	return aesEncrypt(sk, value, random.generateRandomData(IV_BYTE_LENGTH), true, ENABLE_MAC)
-}
-
-export function encryptString(sk: AesKey, value: string): Uint8Array {
-	return aesEncrypt(sk, stringToUtf8Uint8Array(value), random.generateRandomData(IV_BYTE_LENGTH), true, ENABLE_MAC)
-}
 
 export type PubEncSymKey = {
 	pubEncSymKeyBytes: Uint8Array
@@ -127,31 +117,6 @@ export type PublicKeys = {
 	pubRsaKey: null | Uint8Array
 	pubEccKey: null | Uint8Array
 	pubKyberKey: null | Uint8Array
-}
-
-/**
- * An AesKey (usually a group key) and its version.
- */
-export type VersionedKey = Versioned<AesKey>
-
-/**
- * A key that is encrypted with a given version of some other key.
- */
-export type VersionedEncryptedKey = {
-	encryptingKeyVersion: number // the version of the encryption key NOT the encrypted key
-	key: Uint8Array // encrypted key
-}
-
-/**
- * Encrypts the key with the encryptingKey and return the encrypted key and the version of the encryptingKey.
- * @param encryptingKey the encrypting key.
- * @param key the key to be encrypted.
- */
-export function encryptKeyWithVersionedKey(encryptingKey: VersionedKey, key: AesKey): VersionedEncryptedKey {
-	return {
-		encryptingKeyVersion: encryptingKey.version,
-		key: encryptKey(encryptingKey.object, key),
-	}
 }
 
 // Unmapped encrypted owner group instance
@@ -178,6 +143,7 @@ export class CryptoFacade {
 		private readonly pq: PQFacade,
 		private readonly cache: DefaultEntityRestCache | null,
 		private readonly keyLoaderFacade: KeyLoaderFacade,
+		private readonly asymmetricCryptoFacade: AsymmetricCryptoFacade,
 	) {}
 
 	async applyMigrationsForInstance<T>(decryptedInstance: T): Promise<T> {
@@ -657,27 +623,7 @@ export class CryptoFacade {
 		pqMessageSenderIdentityPubKey: EccPublicKey | null
 	}> {
 		const keyPair: AsymmetricKeyPair = await this.keyLoaderFacade.loadKeypair(keyPairGroupId, recipientKeyVersion)
-		return await this.decryptSymKeyWithKeyPair(keyPair, pubEncBucketKey)
-	}
-
-	async decryptSymKeyWithKeyPair(keyPair: AsymmetricKeyPair, pubEncBucketKey: Uint8Array) {
-		const algo = keyPair.keyPairType
-		if (isPqKeyPairs(keyPair)) {
-			const decryptedBucketKey = await this.pq.decapsulateEncoded(pubEncBucketKey, keyPair)
-			return {
-				decryptedBucketKey: uint8ArrayToBitArray(decryptedBucketKey.decryptedSymKey),
-				pqMessageSenderIdentityPubKey: decryptedBucketKey.senderIdentityPubKey,
-			}
-		} else if (isRsaOrRsaEccKeyPair(keyPair)) {
-			const privateKey: RsaPrivateKey = keyPair.privateKey
-			const decryptedBucketKey = await this.rsa.decrypt(privateKey, pubEncBucketKey)
-			return {
-				decryptedBucketKey: uint8ArrayToBitArray(decryptedBucketKey),
-				pqMessageSenderIdentityPubKey: null,
-			}
-		} else {
-			throw new CryptoError("unknown key pair type: " + algo)
-		}
+		return await this.asymmetricCryptoFacade.decryptSymKeyWithKeyPair(keyPair, pubEncBucketKey)
 	}
 
 	private async decryptWithPublicBucket(

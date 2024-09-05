@@ -90,6 +90,7 @@ import { RSA_TEST_KEYPAIR } from "../facades/RsaPqPerformanceTest.js"
 import { DefaultEntityRestCache } from "../../../../../src/common/api/worker/rest/DefaultEntityRestCache.js"
 import { loadLibOQSWASM } from "../WASMTestUtils.js"
 import { KeyLoaderFacade } from "../../../../../src/common/api/worker/facades/KeyLoaderFacade.js"
+import { AsymmetricCryptoFacade } from "../../../../../src/common/api/worker/crypto/AsymmetricCryptoFacade.js"
 
 const { captor, anything, argThat } = matchers
 
@@ -173,6 +174,7 @@ o.spec("CryptoFacadeTest", function () {
 	let userFacade: UserFacade
 	let keyLoaderFacade: KeyLoaderFacade
 	let cache: DefaultEntityRestCache
+	let asymmetricCryptoFacade: AsymmetricCryptoFacade
 
 	o.before(function () {
 		restClient = object()
@@ -185,6 +187,7 @@ o.spec("CryptoFacadeTest", function () {
 	o.beforeEach(function () {
 		serviceExecutor = object()
 		entityClient = object()
+		asymmetricCryptoFacade = object()
 		ownerEncSessionKeysUpdateQueue = object()
 		crypto = new CryptoFacade(
 			userFacade,
@@ -197,6 +200,7 @@ o.spec("CryptoFacadeTest", function () {
 			pqFacade,
 			cache,
 			keyLoaderFacade,
+			asymmetricCryptoFacade,
 		)
 	})
 
@@ -554,6 +558,7 @@ o.spec("CryptoFacadeTest", function () {
 			pqFacadeMock,
 			cache,
 			keyLoaderFacade,
+			asymmetricCryptoFacade,
 		)
 		let senderMailAddress = "alice@tutanota.com"
 		let recipientMailAddress = "bob@tutanota.com"
@@ -680,6 +685,7 @@ o.spec("CryptoFacadeTest", function () {
 			pqFacadeMock,
 			cache,
 			keyLoaderFacade,
+			asymmetricCryptoFacade,
 		)
 		let senderMailAddress = "alice@tutanota.com"
 		let recipientMailAddress = "bob@tutanota.com"
@@ -817,6 +823,7 @@ o.spec("CryptoFacadeTest", function () {
 			pqFacadeMock,
 			cache,
 			keyLoaderFacade,
+			asymmetricCryptoFacade,
 		)
 		let senderMailAddress = "alice@tutanota.com"
 		let recipientMailAddress = "bob@tutanota.com"

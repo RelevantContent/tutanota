@@ -1,6 +1,6 @@
-import { VersionedKey } from "../crypto/CryptoFacade.js"
 import { getFromMap, neverNull } from "@tutao/tutanota-utils"
 import { User } from "../../entities/sys/TypeRefs.js"
+import { VersionedKey } from "../crypto/CryptoWrapper.js"
 
 /**
  * A cache for decrypted current keys of each group. Encrypted keys are stored on membership.symEncGKey.

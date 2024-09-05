@@ -75,9 +75,9 @@ import {
 	UserGroupKeyRotationService,
 } from "../../entities/sys/Services.js"
 import { IServiceExecutor } from "../../common/ServiceRequest.js"
-import { CryptoFacade, PublicKeys, VersionedEncryptedKey, VersionedKey } from "../crypto/CryptoFacade.js"
+import { CryptoFacade, PublicKeys } from "../crypto/CryptoFacade.js"
 import { assertWorkerOrNode } from "../../common/Env.js"
-import { CryptoWrapper } from "../crypto/CryptoWrapper.js"
+import { CryptoWrapper, VersionedEncryptedKey, VersionedKey } from "../crypto/CryptoWrapper.js"
 import { getUserGroupMemberships } from "../../common/utils/GroupUtils.js"
 import { RecoverCodeFacade, RecoverData } from "./lazy/RecoverCodeFacade.js"
 import { UserFacade } from "./UserFacade.js"

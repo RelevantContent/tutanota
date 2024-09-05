@@ -74,6 +74,7 @@ import { cryptoWrapper } from "./crypto/CryptoWrapper.js"
 import { RecoverCodeFacade } from "./facades/lazy/RecoverCodeFacade.js"
 import { CacheManagementFacade } from "./facades/lazy/CacheManagementFacade.js"
 import type { Credentials } from "../../misc/credentials/Credentials.js"
+import { AsymmetricCryptoFacade } from "./crypto/AsymmetricCryptoFacade.js"
 
 assertWorkerOrNode()
 
@@ -81,6 +82,7 @@ export type WorkerLocatorType = {
 	// network & encryption
 	restClient: RestClient
 	serviceExecutor: IServiceExecutor
+	asymmetricCrypto: AsymmetricCryptoFacade
 	crypto: CryptoFacade
 	instanceMapper: InstanceMapper
 	cacheStorage: CacheStorage
@@ -221,6 +223,8 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 
 	locator.keyLoader = new KeyLoaderFacade(locator.keyCache, locator.user, locator.cachingEntityClient, locator.cacheManagement)
 
+	locator.asymmetricCrypto = new AsymmetricCryptoFacade(locator.rsa, locator.pqFacade)
+
 	locator.crypto = new CryptoFacade(
 		locator.user,
 		locator.cachingEntityClient,
@@ -232,6 +236,7 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		locator.pqFacade,
 		cache,
 		locator.keyLoader,
+		locator.asymmetricCrypto,
 	)
 
 	locator.recoverCode = lazyMemoized(async () => {
