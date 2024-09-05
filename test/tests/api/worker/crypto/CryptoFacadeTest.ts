@@ -293,6 +293,10 @@ o.spec("CryptoFacadeTest", function () {
 			pubKeyVersion: "0",
 		})
 
+		when(asymmetricCryptoFacade.decryptSymKeyWithKeyPair(RSA_TEST_KEYPAIR, pubEncBucketKey)).thenResolve({
+			decryptedAesKey: bk,
+			senderIdentityPubKey: null,
+		})
 		when(entityClient.loadAll(BucketPermissionTypeRef, getListId(bucketPermission))).thenResolve([bucketPermission])
 		when(entityClient.loadAll(PermissionTypeRef, getListId(permission))).thenResolve([permission])
 		when(
@@ -374,6 +378,16 @@ o.spec("CryptoFacadeTest", function () {
 			symKeyVersion: null,
 		})
 
+		when(
+			asymmetricCryptoFacade.decryptSymKeyWithKeyPair(
+				{
+					keyPairType: pqKeyPairs.keyPairType,
+					eccKeyPair: pqKeyPairs.eccKeyPair,
+					kyberKeyPair: pqKeyPairs.kyberKeyPair,
+				},
+				pubEncBucketKey,
+			),
+		).thenResolve({ decryptedAesKey: bk, senderIdentityPubKey: senderIdentityKeyPair.publicKey })
 		when(userFacade.createAuthHeaders()).thenReturn({})
 		when(restClient.request(anything(), HttpMethod.PUT, anything())).thenResolve(undefined)
 		when(entityClient.loadAll(BucketPermissionTypeRef, getListId(bucketPermission))).thenResolve([bucketPermission])
@@ -447,6 +461,16 @@ o.spec("CryptoFacadeTest", function () {
 			symKeyVersion: null,
 		})
 
+		when(
+			asymmetricCryptoFacade.decryptSymKeyWithKeyPair(
+				{
+					keyPairType: pqKeyPairs_v1.keyPairType,
+					eccKeyPair: pqKeyPairs_v1.eccKeyPair,
+					kyberKeyPair: pqKeyPairs_v1.kyberKeyPair,
+				},
+				pubEncBucketKey,
+			),
+		).thenResolve({ decryptedAesKey: bk, senderIdentityPubKey: senderIdentityKeyPair.publicKey })
 		when(userFacade.createAuthHeaders()).thenReturn({})
 		when(restClient.request(anything(), HttpMethod.PUT, anything())).thenResolve(undefined)
 		when(entityClient.loadAll(BucketPermissionTypeRef, getListId(bucketPermission))).thenResolve([bucketPermission])
@@ -500,6 +524,16 @@ o.spec("CryptoFacadeTest", function () {
 				pubRsaKey: null,
 			}),
 		)
+		when(
+			asymmetricCryptoFacade.decryptSymKeyWithKeyPair(
+				{
+					keyPairType: pqKeyPairs_v1.keyPairType,
+					eccKeyPair: pqKeyPairs_v1.eccKeyPair,
+					kyberKeyPair: pqKeyPairs_v1.kyberKeyPair,
+				},
+				pubEncBucketKey,
+			),
+		).thenResolve({ decryptedAesKey: bk, senderIdentityPubKey: senderIdentityKeyPair.publicKey })
 		when(userFacade.createAuthHeaders()).thenReturn({})
 		when(restClient.request(anything(), HttpMethod.PUT, anything())).thenResolve(undefined)
 		when(keyLoaderFacade.loadKeypair(recipientTestUser.userGroup._id, 1)).thenResolve(pqKeyPairs_v1)
@@ -1603,6 +1637,11 @@ o.spec("CryptoFacadeTest", function () {
 		const bucketKeyLiteral = await instanceMapper.encryptAndMapToLiteral(BucketKeyModel, bucketKey, null)
 		Object.assign(mailLiteral, { bucketKey: bucketKeyLiteral })
 
+		when(asymmetricCryptoFacade.decryptSymKeyWithKeyPair(RSA_TEST_KEYPAIR, pubEncBucketKey)).thenResolve({
+			decryptedAesKey: bk,
+			senderIdentityPubKey: null,
+		})
+
 		return {
 			mailLiteral,
 			bucketKey,
@@ -1690,6 +1729,17 @@ o.spec("CryptoFacadeTest", function () {
 			instanceMapper,
 			mailLiteral,
 		)
+
+		when(
+			asymmetricCryptoFacade.decryptSymKeyWithKeyPair(
+				{
+					keyPairType: pqKeyPairs.keyPairType,
+					eccKeyPair: pqKeyPairs.eccKeyPair,
+					kyberKeyPair: pqKeyPairs.kyberKeyPair,
+				},
+				pubEncBucketKey,
+			),
+		).thenResolve({ decryptedAesKey: bk, senderIdentityPubKey: senderIdentityKeyPair.publicKey })
 
 		return {
 			mailLiteral,
