@@ -23,6 +23,7 @@ import { PQFacade } from "../PQFacade.js"
 import { KeyLoaderFacade } from "../KeyLoaderFacade.js"
 import { CacheManagementFacade } from "./CacheManagementFacade.js"
 import { encryptKeyWithVersionedKey, encryptString, VersionedKey } from "../../crypto/CryptoWrapper.js"
+import { AsymmetricCryptoFacade } from "../../crypto/AsymmetricCryptoFacade.js"
 
 assertWorkerOrNode()
 
@@ -35,6 +36,7 @@ export class GroupManagementFacade {
 		private readonly pqFacade: PQFacade,
 		private readonly keyLoaderFacade: KeyLoaderFacade,
 		private readonly cacheManagementFacade: CacheManagementFacade,
+		private readonly asymmetricCryptoFacade: AsymmetricCryptoFacade,
 	) {}
 
 	async readUsedSharedMailGroupStorage(group: Group): Promise<number> {
@@ -262,6 +264,13 @@ export class GroupManagementFacade {
 	}
 
 	/**
+	 * @returns true if the group currently has an adminEncGKey. This may be an asymmetrically encrypted one.
+	 */
+	hasAdminEncGKey(group: Group) {
+		return (group.adminGroupEncGKey != null && group.adminGroupEncGKey.length !== 0) || group.pubAdminGroupEncGKey != null
+	}
+
+	/**
 	 * Get a group key for certain group types.
 	 *
 	 * Some groups (e.g. user groups or shared mailboxes) have adminGroupEncGKey set on creation. For those groups we can fairly easily get a group key without
@@ -273,18 +282,37 @@ export class GroupManagementFacade {
 			return this.keyLoaderFacade.getCurrentSymGroupKey(groupId)
 		} else {
 			const group = await this.entityClient.load(GroupTypeRef, groupId)
-			if (group.adminGroupEncGKey == null || group.adminGroupEncGKey.length === 0) {
+			if (!this.hasAdminEncGKey(group)) {
 				throw new ProgrammingError("Group doesn't have adminGroupEncGKey, you can't get group key this way")
 			}
 			if (!(group.admin && this.userFacade.hasGroup(group.admin))) {
 				throw new Error(`The user is not a member of the admin group ${group.admin} when trying to get the group key for group ${groupId}`)
 			}
 
+			// TODO handle the pubAdminGroupEncGKey case!
 			// e.g. I am a member of the group that administrates group G and want to add a new member to G
-			const version = Number(group.adminGroupKeyVersion ?? 0)
-			const requiredAdminGroupKey = await this.keyLoaderFacade.loadSymGroupKey(assertNotNull(group.admin), version)
-			const decryptedKey = decryptKey(requiredAdminGroupKey, assertNotNull(group.adminGroupEncGKey))
-			return { object: decryptedKey, version: Number(group.groupKeyVersion) }
+			const requiredAdminKeyVersion = Number(group.adminGroupKeyVersion ?? 0)
+			if (group.adminGroupEncGKey != null) {
+				return await this.decryptViaSymmetricAdminGKey(group, requiredAdminKeyVersion)
+			} else {
+				return await this.decryptViaPublicAdminGKey(group, requiredAdminKeyVersion)
+			}
 		}
+	}
+
+	private async decryptViaSymmetricAdminGKey(group: Group, requiredAdminKeyVersion: number): Promise<VersionedKey> {
+		const requiredAdminGroupKey = await this.keyLoaderFacade.loadSymGroupKey(assertNotNull(group.admin), requiredAdminKeyVersion)
+		const decryptedKey = decryptKey(requiredAdminGroupKey, assertNotNull(group.adminGroupEncGKey))
+		return { object: decryptedKey, version: Number(group.groupKeyVersion) }
+	}
+
+	private async decryptViaPublicAdminGKey(group: Group, requiredAdminKeyVersion: number): Promise<VersionedKey> {
+		const requiredAdminGroupKeyPair = await this.keyLoaderFacade.loadKeypair(assertNotNull(group.admin), requiredAdminKeyVersion)
+		const decryptedKey = await this.asymmetricCryptoFacade.decryptSymKeyWithKeyPair(
+			requiredAdminGroupKeyPair,
+			assertNotNull(group.pubAdminGroupEncGKey).pubEncSymKey,
+		)
+		// TODO authentication
+		return { object: decryptedKey.decryptedAesKey, version: Number(group.groupKeyVersion) }
 	}
 }

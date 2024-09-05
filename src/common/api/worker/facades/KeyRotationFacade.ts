@@ -386,7 +386,7 @@ export class KeyRotationFacade {
 
 		const newAdminGroupKeys = await this.generateGroupKeys(adminGroup)
 		const newUserGroupKeys = await this.generateGroupKeys(userGroup)
-		const encryptedAdminKeys = this.encryptGroupKeys(adminGroup, currentAdminGroupKey, newAdminGroupKeys, newAdminGroupKeys.symGroupKey)
+		const encryptedAdminKeys = await this.encryptGroupKeys(adminGroup, currentAdminGroupKey, newAdminGroupKeys, newAdminGroupKeys.symGroupKey)
 		const encryptedUserKeys = await this.encryptUserGroupKey(userGroup, currentUserGroupKey, newUserGroupKeys, passphraseKey, newAdminGroupKeys, user)
 		const membershipEncNewGroupKey = this.cryptoWrapper.encryptKeyWithVersionedKey(newUserGroupKeys.symGroupKey, newAdminGroupKeys.symGroupKey.object)
 
@@ -445,7 +445,7 @@ export class KeyRotationFacade {
 		const currentGroupKey = await this.keyLoaderFacade.getCurrentSymGroupKey(targetGroupId)
 
 		const newGroupKeys = await this.generateGroupKeys(targetGroup)
-		const encryptedGroupKeys = this.encryptGroupKeys(targetGroup, currentGroupKey, newGroupKeys, currentAdminGroupKey)
+		const encryptedGroupKeys = await this.encryptGroupKeys(targetGroup, currentGroupKey, newGroupKeys, currentAdminGroupKey)
 		const membershipSymEncNewGroupKey = this.cryptoWrapper.encryptKeyWithVersionedKey(currentUserGroupKey, newGroupKeys.symGroupKey.object)
 		const preparedReInvitations = await this.handlePendingInvitations(targetGroup, newGroupKeys.symGroupKey)
 
@@ -490,7 +490,7 @@ export class KeyRotationFacade {
 		const otherMembers = members.filter((member) => member.user != user._id)
 		let currentGroupKey = await this.getCurrentGroupKey(targetGroupId, targetGroup)
 		const newGroupKeys = await this.generateGroupKeys(targetGroup)
-		const encryptedGroupKeys = this.encryptGroupKeys(targetGroup, currentGroupKey, newGroupKeys, currentAdminGroupKey)
+		const encryptedGroupKeys = await this.encryptGroupKeys(targetGroup, currentGroupKey, newGroupKeys, currentAdminGroupKey)
 
 		const groupMembershipUpdateData = new Array<GroupMembershipUpdateData>()
 
@@ -556,7 +556,7 @@ export class KeyRotationFacade {
 			currentUserGroupKey,
 		)
 
-		const encryptedUserKeys = this.encryptGroupKeys(userGroup, currentUserGroupKey, newUserGroupKeys, newAdminGroupKeys.symGroupKey)
+		const encryptedUserKeys = await this.encryptGroupKeys(userGroup, currentUserGroupKey, newUserGroupKeys, newAdminGroupKeys.symGroupKey)
 
 		let recoverCodeWrapper: RecoverData | null = null
 		if (user.auth?.recoverCode != null) {
@@ -694,9 +694,14 @@ export class KeyRotationFacade {
 		return elementIdPart(keyRotation._id)
 	}
 
-	private encryptGroupKeys(group: Group, currentGroupKey: VersionedKey, newKeys: GeneratedGroupKeys, adminGroupKeys: VersionedKey): EncryptedGroupKeys {
+	private async encryptGroupKeys(
+		group: Group,
+		currentGroupKey: VersionedKey,
+		newKeys: GeneratedGroupKeys,
+		adminGroupKeys: VersionedKey,
+	): Promise<EncryptedGroupKeys> {
 		const newGroupKeyEncCurrentGroupKey = this.cryptoWrapper.encryptKeyWithVersionedKey(newKeys.symGroupKey, currentGroupKey.object)
-		const adminGroupKeyEncNewGroupKey = this.hasAdminEncGKey(group)
+		const adminGroupKeyEncNewGroupKey = (await this.groupManagementFacade()).hasAdminEncGKey(group)
 			? this.cryptoWrapper.encryptKeyWithVersionedKey(adminGroupKeys, newKeys.symGroupKey.object)
 			: null
 
@@ -748,10 +753,6 @@ export class KeyRotationFacade {
 		} else {
 			return null
 		}
-	}
-
-	private hasAdminEncGKey(groupToRotate: Group) {
-		return groupToRotate.adminGroupEncGKey != null && groupToRotate.adminGroupEncGKey.length !== 0
 	}
 
 	/**

@@ -261,6 +261,7 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 			locator.pqFacade,
 			locator.keyLoader,
 			await locator.cacheManagement(),
+			locator.asymmetricCrypto,
 		)
 	})
 	locator.keyRotation = new KeyRotationFacade(

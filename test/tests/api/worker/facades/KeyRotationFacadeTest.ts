@@ -354,6 +354,7 @@ o.spec("KeyRotationFacadeTest", function () {
 			})
 			o("Rotated group does not have adminEncKey", async function () {
 				group.adminGroupEncGKey = null
+				when(groupManagementFacade.hasAdminEncGKey(group)).thenReturn(false)
 				group.adminGroupKeyVersion = null
 				keyRotationFacade.setPendingKeyRotations({
 					pwKey: null,
@@ -704,6 +705,8 @@ o.spec("KeyRotationFacadeTest", function () {
 					userEncRecoverCode: RECOVER_CODE_ENC_NEW_USER_GROUP_KEY.key,
 					recoveryCodeVerifier: RECOVER_CODE_VERIFIER,
 				}
+				when(groupManagementFacade.hasAdminEncGKey(userGroup)).thenReturn(true)
+				when(groupManagementFacade.hasAdminEncGKey(adminGroup)).thenReturn(true)
 				when(recoverCodeFacade.getRawRecoverCode(PW_KEY)).thenResolve(RECOVER_CODE)
 				when(recoverCodeFacade.encryptRecoveryCode(RECOVER_CODE, NEW_USER_GROUP_KEY)).thenReturn(recoverData)
 				when(userFacade.deriveUserGroupKeyDistributionKey(userGroupId, PW_KEY)).thenReturn(DISTRIBUTION_KEY)
@@ -1173,6 +1176,7 @@ o.spec("KeyRotationFacadeTest", function () {
 			group: groupId,
 		})
 
+		when(groupManagementFacade.hasAdminEncGKey(group)).thenReturn(true)
 		when(entityClientMock.load(GroupInfoTypeRef, group.groupInfo)).thenResolve(groupInfo)
 		when(entityClientMock.load(GroupTypeRef, groupId)).thenResolve(group)
 		when(entityClientMock.loadAll(SentGroupInvitationTypeRef, group.invitations)).thenResolve([])

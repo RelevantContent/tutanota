@@ -102,7 +102,7 @@ import { CryptoError } from "@tutao/tutanota-crypto/error.js"
 import { KeyLoaderFacade } from "../facades/KeyLoaderFacade.js"
 import { ProgrammingError } from "../../common/error/ProgrammingError.js"
 import { encryptKeyWithVersionedKey, VersionedEncryptedKey, VersionedKey } from "./CryptoWrapper.js"
-import { AsymmetricCryptoFacade } from "./AsymmetricCryptoFacade.js"
+import { AsymmetricCryptoFacade, DecapsulatedAesKey } from "./AsymmetricCryptoFacade.js"
 
 assertWorkerOrNode()
 
@@ -283,18 +283,18 @@ export class CryptoFacade {
 
 	public async resolveWithBucketKey(bucketKey: BucketKey, instance: Record<string, any>, typeModel: TypeModel): Promise<ResolvedSessionKeys> {
 		const instanceElementId = this.getElementIdFromInstance(instance)
-		let decBucketKey: AesKey
+		let decryptedBucketKey: AesKey
 		let unencryptedSenderAuthStatus: EncryptionAuthStatus | null = null
 		let pqMessageSenderKey: EccPublicKey | null = null
 		if (bucketKey.keyGroup && bucketKey.pubEncBucketKey) {
 			// bucket key is encrypted with public key for internal recipient
-			const { decryptedBucketKey, pqMessageSenderIdentityPubKey } = await this.decryptBucketKeyWithKeyPairOfGroupAndPrepareAuthentication(
+			const { decryptedAesKey, senderIdentityPubKey } = await this.decryptBucketKeyWithKeyPairOfGroupAndPrepareAuthentication(
 				bucketKey.keyGroup,
 				bucketKey.pubEncBucketKey,
 				Number(bucketKey.recipientKeyVersion),
 			)
-			decBucketKey = decryptedBucketKey
-			pqMessageSenderKey = pqMessageSenderIdentityPubKey
+			decryptedBucketKey = decryptedAesKey
+			pqMessageSenderKey = senderIdentityPubKey
 		} else if (bucketKey.groupEncBucketKey) {
 			// received as secure external recipient or reply from secure external sender
 			let keyGroup
@@ -308,14 +308,14 @@ export class CryptoFacade {
 				keyGroup = neverNull(instance._ownerGroup)
 			}
 
-			decBucketKey = await this.resolveWithGroupReference(keyGroup, groupKeyVersion, bucketKey.groupEncBucketKey)
+			decryptedBucketKey = await this.resolveWithGroupReference(keyGroup, groupKeyVersion, bucketKey.groupEncBucketKey)
 			unencryptedSenderAuthStatus = EncryptionAuthStatus.AES_NO_AUTHENTICATION
 		} else {
 			throw new SessionKeyNotFoundError(`encrypted bucket key not set on instance ${typeModel.name}`)
 		}
 		const resolvedSessionKeys = await this.collectAllInstanceSessionKeysAndAuthenticate(
 			bucketKey,
-			decBucketKey,
+			decryptedBucketKey,
 			instanceElementId,
 			instance,
 			typeModel,
@@ -618,10 +618,7 @@ export class CryptoFacade {
 		keyPairGroupId: Id,
 		pubEncBucketKey: Uint8Array,
 		recipientKeyVersion: number,
-	): Promise<{
-		decryptedBucketKey: AesKey
-		pqMessageSenderIdentityPubKey: EccPublicKey | null
-	}> {
+	): Promise<DecapsulatedAesKey> {
 		const keyPair: AsymmetricKeyPair = await this.keyLoaderFacade.loadKeypair(keyPairGroupId, recipientKeyVersion)
 		return await this.asymmetricCryptoFacade.decryptSymKeyWithKeyPair(keyPair, pubEncBucketKey)
 	}
@@ -645,13 +642,13 @@ export class CryptoFacade {
 			)
 		}
 
-		const { decryptedBucketKey } = await this.decryptBucketKeyWithKeyPairOfGroupAndPrepareAuthentication(
+		const { decryptedAesKey } = await this.decryptBucketKeyWithKeyPairOfGroupAndPrepareAuthentication(
 			bucketPermission.group,
 			pubEncBucketKey,
 			Number(bucketPermission.pubKeyVersion ?? 0),
 		)
 
-		const sk = decryptKey(decryptedBucketKey, bucketEncSessionKey)
+		const sk = decryptKey(decryptedAesKey, bucketEncSessionKey)
 
 		if (bucketPermission._ownerGroup) {
 			// is not defined for some old AccountingInfos
@@ -759,7 +756,7 @@ export class CryptoFacade {
 				if (!isPqKeyPairs(keyPair)) {
 					throw new CryptoError("wrong key type. expected tuta-crypt. got " + keyPair.keyPairType)
 				}
-				decryptedBytes = (await this.pq.decapsulateEncoded(pubEncSessionKey, keyPair)).decryptedSymKey
+				decryptedBytes = (await this.pq.decapsulateEncoded(pubEncSessionKey, keyPair)).decryptedSymKeyBytes
 				break
 			}
 			default:
