@@ -2319,7 +2319,7 @@ export type PubEncKeyData = {
 	identifier: string;
 	identifierType: NumberString;
 	protocolVersion: NumberString;
-	pubEncSymKeyBytes: Uint8Array;
+	pubEncSymKey: Uint8Array;
 	recipientKeyVersion: NumberString;
 	senderKeyVersion: null | NumberString;
 }

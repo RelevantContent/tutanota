@@ -655,7 +655,7 @@ export class KeyRotationFacade {
 					const pubEncKeyData = createPubEncKeyData({
 						identifier: keyData.mailAddress,
 						identifierType: PublicKeyIdentifierType.MAIL_ADDRESS,
-						pubEncSymKeyBytes: keyData.pubEncBucketKey,
+						pubEncSymKey: keyData.pubEncBucketKey,
 						recipientKeyVersion: keyData.recipientKeyVersion,
 						senderKeyVersion: keyData.senderKeyVersion,
 						protocolVersion: keyData.protocolVersion,
@@ -873,7 +873,7 @@ export class KeyRotationFacade {
 		return createPubEncKeyData({
 			identifier: adminGroupId,
 			identifierType: PublicKeyIdentifierType.GROUP_ID,
-			pubEncSymKeyBytes: enc.pubEncSymKeyBytes,
+			pubEncSymKey: enc.pubEncSymKeyBytes,
 			protocolVersion: enc.cryptoProtocolVersion,
 			senderKeyVersion: enc.senderKeyVersion,
 			recipientKeyVersion: enc.recipientKeyVersion,
