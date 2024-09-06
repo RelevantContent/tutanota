@@ -523,6 +523,7 @@ export class EventBusClient {
 		// We only have the correct amount of total work after loading all entity event batches.
 		// The progress for processed batches is tracked inside the event queue.
 		const progressMonitor = new ProgressMonitorDelegate(this.progressTracker, eventBatches.length + 1)
+		console.log("EVENT BUS", `progress monitor expects ${eventBatches.length + 1} events (one completes right away)`)
 		await progressMonitor.workDone(1) // show progress right away
 		eventQueue.setProgressMonitor(progressMonitor)
 
@@ -653,6 +654,7 @@ export class EventBusClient {
 	private async processEventBatch(batch: QueuedBatch): Promise<void> {
 		try {
 			if (this.isTerminated()) return
+			console.log("EVENT", "processing batch", JSON.stringify(batch))
 			const filteredEvents = await this.cache.entityEventsReceived(batch)
 			if (!this.isTerminated()) await this.listener.onEntityEventsReceived(filteredEvents, batch.batchId, batch.groupId)
 		} catch (e) {
@@ -670,6 +672,7 @@ export class EventBusClient {
 				this.serviceUnavailableRetry = retryPromise
 				return retryPromise
 			} else {
+				console.log("EVENT", "error", e)
 				throw e
 			}
 		}

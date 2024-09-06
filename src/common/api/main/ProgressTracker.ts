@@ -44,6 +44,7 @@ export class ProgressTracker {
 	}
 
 	async workDoneForMonitor(id: ProgressMonitorId, amount: number): Promise<void> {
+		console.log("progress tracker workDoneFor", id, amount)
 		this.getMonitor(id)?.workDone(amount)
 	}
 
@@ -52,8 +53,10 @@ export class ProgressTracker {
 	}
 
 	private onProgress(id: ProgressMonitorId, percentage: number) {
+		const completedPercentage = this.completedAmount()
+		console.log("onProgress", id, percentage, "completed work", this.completedWork(), "total work", this.totalWork(), "%", completedPercentage)
 		// notify
-		this.onProgressUpdate(this.completedAmount())
+		this.onProgressUpdate(completedPercentage)
 		// we might be done with this one
 		if (percentage >= 100) this.monitors.delete(id)
 	}
