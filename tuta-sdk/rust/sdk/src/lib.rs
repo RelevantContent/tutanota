@@ -61,6 +61,7 @@ mod type_model_provider;
 mod typed_entity_client;
 mod user_facade;
 mod util;
+mod TutanotaConstants;
 
 uniffi::setup_scaffolding!();
 
