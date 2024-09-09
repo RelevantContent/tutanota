@@ -84,6 +84,7 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 	private _selectedFolder: SettingsFolder<unknown>
 	private _currentViewer: UpdatableSettingsViewer | null = null
 	private showBusinessSettings: stream<boolean> = stream(false)
+	private showAffiliateSettings: stream<boolean> = stream(true)
 	private readonly _targetFolder: string
 	private readonly _targetRoute: string
 	detailsViewer: UpdatableSettingsDetailsViewer | null = null // the component for the details column. can be set by settings views
@@ -424,6 +425,16 @@ export class SettingsView extends BaseTopLevelView implements TopLevelView<Setti
 						() => new ReferralSettingsViewer(),
 						undefined,
 					).setIsVisibleHandler(() => !this.showBusinessSettings()),
+				)
+
+				this._adminFolders.push(
+					new SettingsFolder(
+						"affiliateSettings_label",
+						() => BootIcons.Share,
+						"affiliate",
+						() => new ReferralSettingsViewer(),
+						undefined,
+					).setIsVisibleHandler(() => this.showAffiliateSettings()),
 				)
 			}
 		}

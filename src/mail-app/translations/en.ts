@@ -1755,6 +1755,7 @@ export default {
 		"yourCalendars_label": "Your calendars",
 		"yourFolders_action": "YOUR FOLDERS",
 		"yourMessage_label": "Your message",
+		"affiliateSettings_label": "Affiliate program",
 		"you_label": "You"
 	}
 }
